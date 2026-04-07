@@ -456,6 +456,10 @@ function parseIncidentLog(rows, nameCol, dateCol, typeCol) {
 }
 
 function mapType(type, row) {
+  // Skip brand ambassador shifts entirely
+  const shift = (row['Shift']||row['shift']||row['Schedule']||row['schedule']||row['Schedule Name']||row['Position']||row['position']||row['Shift Name']||row['Shift Time']||'').toString().toLowerCase();
+  if (/brand.?ambassador/i.test(shift) || /\bba\b/i.test(shift) || /lead.?brand/i.test(shift)) return null;
+
   if (/no.?show/i.test(type)) return '1';
   if (/late/i.test(type) && /clock.?in/i.test(type)) {
     const lv = row['Late']||row['late']||row['Late/Early']||'';
