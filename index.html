@@ -456,9 +456,9 @@ function parseIncidentLog(rows, nameCol, dateCol, typeCol) {
 }
 
 function mapType(type, row) {
-  // Skip brand ambassador shifts entirely
-  const shift = (row['Shift']||row['shift']||row['Schedule']||row['schedule']||row['Schedule Name']||row['Position']||row['position']||row['Shift Name']||row['Shift Time']||'').toString().toLowerCase();
-  if (/brand.?ambassador/i.test(shift) || /\bba\b/i.test(shift) || /lead.?brand/i.test(shift)) return null;
+  // Skip brand ambassador shifts entirely - check ALL column values for brand ambassador
+  const allVals = Object.values(row).map(v => (v||'').toString().toLowerCase()).join(' ');
+  if (/brand.?ambassador/i.test(allVals) || /lead.?brand/i.test(allVals)) return null;
 
   if (/no.?show/i.test(type)) return '1';
   if (/late/i.test(type) && /clock.?in/i.test(type)) {
