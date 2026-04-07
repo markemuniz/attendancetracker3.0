@@ -308,14 +308,20 @@ document.getElementById('passwordInput').addEventListener('keydown', e => {
 async function handleLogin() {
   const pw = document.getElementById('passwordInput').value;
   if (!pw) return;
-  const hash = await sha256(pw);
-  if (hash === PASSWORD_HASH) {
-    sessionStorage.setItem('tracker_unlocked', '1');
-    showApp();
-  } else {
+  try {
+    const hash = await sha256(pw);
+    if (hash === PASSWORD_HASH) {
+      sessionStorage.setItem('tracker_unlocked', '1');
+      showApp();
+    } else {
+      document.getElementById('errorMsg').style.display = 'block';
+      document.getElementById('passwordInput').value = '';
+      document.getElementById('passwordInput').focus();
+    }
+  } catch(err) {
+    console.error('Login error:', err);
+    document.getElementById('errorMsg').textContent = 'Login error: ' + err.message;
     document.getElementById('errorMsg').style.display = 'block';
-    document.getElementById('passwordInput').value = '';
-    document.getElementById('passwordInput').focus();
   }
 }
 
