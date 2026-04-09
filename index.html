@@ -464,7 +464,7 @@ function mapType(type, row) {
   if (/late/i.test(type) && /clock.?in/i.test(type)) {
     const lv = row['Late']||row['late']||row['Late/Early']||'';
     const m = parseMins(lv.toString());
-    if (m !== null && m < 8) return null; // under 8 minutes, ignore
+    if (m !== null && m <= 8) return null; // 8 minutes or under, ignore
     return '0.5'; // always 0.5 no matter how late
   }
   if (/late.?clock.?out/i.test(type)) return null;
