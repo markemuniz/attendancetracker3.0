@@ -442,9 +442,22 @@ function parseIncidentLog(rows, nameCol, dateCol, typeCol) {
     if (val) {
       parsed[sk].dates[ds] = val;
       // Store the reason/minutes as a note
-      const lateInfo = (row['Late/Early']||row['Late']||row['late']||'').toString().trim();
-      const shiftTime = (row['Shift Time']||'').toString().trim();
-      const clockTime = (row['Clock In/Out Time']||'').toString().trim();
+      const keys = Object.keys(row);
+      const lateKey = keys.find(k => /late.*early|early.*late/i.test(k)) || keys.find(k => /^late$/i.test(k.trim()));
+      const shiftKey = keys.find(k => /shift.?time/i.test(k));
+      const clockKey = keys.find(k => /clock.?in.*out|clock.?time/i.test(k));
+      const lateInfo = lateKey ? (row[lateKey]||'').toString().trim() : '';
+      const shiftTime = shiftKey ? (row[shiftKey]||'').toString().trim() : '';
+      let clockTime = clockKey ? (row[clockKey]||'').toString().trim() : '';
+      // Convert Excel time serial to readable time
+      if (clockTime && !isNaN(parseFloat(clockTime)) && parseFloat(clockTime) < 1) {
+        const totalMins = Math.round(parseFloat(clockTime) * 1440);
+        const h = Math.floor(totalMins / 60);
+        const mn = totalMins % 60;
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        clockTime = h12 + ':' + String(mn).padStart(2,'0') + ' ' + ampm;
+      }
       let note = type;
       if (lateInfo) note += ' (' + lateInfo + ')';
       if (shiftTime) note += ' | Shift: ' + shiftTime;
@@ -463,8 +476,12 @@ function mapType(type, row) {
 
   if (/no.?show/i.test(type)) return '1';
   if (/late/i.test(type) && /clock.?in/i.test(type)) {
-    const lv = row['Late']||row['late']||row['Late/Early']||'';
-    const m = parseMins(lv.toString());
+    // Find the late/early column flexibly - xlsx may have different key names
+    let lv = '';
+    const keys = Object.keys(row);
+    const lateKey = keys.find(k => /^late$/i.test(k.trim())) || keys.find(k => /late.*early|early.*late/i.test(k)) || keys.find(k => /late/i.test(k) && !/clock/i.test(k));
+    if (lateKey) lv = (row[lateKey]||'').toString().trim();
+    const m = parseMins(lv);
     if (m !== null && m < 8) return null; // under 8 minutes, ignore
     return '0.5'; // always 0.5 no matter how late
   }
@@ -490,7 +507,11 @@ function parseMins(s) {
   if (hms) return (parseInt(hms[1])||0)*60+(parseInt(hms[2])||0);
   // Handle plain number
   const n = parseFloat(s);
-  return isNaN(n) ? null : n;
+  if (isNaN(n)) return null;
+  // Excel time serial: fractions of a day (e.g. 0.00486 = 7 min)
+  // If the number is less than 1, treat it as a fraction of a day
+  if (n > 0 && n < 1) return Math.round(n * 1440);
+  return n;
 }
 
 function parseGrid(rows, fnCol, lnCol, cols) {
