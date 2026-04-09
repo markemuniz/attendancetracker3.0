@@ -476,20 +476,75 @@ function mapType(type, row) {
 
   if (/no.?show/i.test(type)) return '1';
   if (/late/i.test(type) && /clock.?in/i.test(type)) {
-    // Find the late/early column flexibly - xlsx may have different key names
-    let lv = '';
+    // Calculate actual late minutes from clock times instead of trusting CSV's reported value
     const keys = Object.keys(row);
+    const shiftKey = keys.find(k => /shift.?time/i.test(k));
+    const clockKey = keys.find(k => /clock.?in.*out|clock.?time/i.test(k));
+    const shiftVal = shiftKey ? (row[shiftKey]||'').toString().trim() : '';
+    const clockVal = clockKey ? (row[clockKey]||'').toString().trim() : '';
+
+    // Try to calculate real minutes from shift start vs clock-in
+    const realMins = calcLateMinutes(shiftVal, clockVal);
+    if (realMins !== null) {
+      if (realMins < 8) return null; // under 8 real minutes, ignore
+      return '0.5';
+    }
+
+    // Fallback: use the reported Late/Early column if clock times unavailable
+    let lv = '';
     const lateKey = keys.find(k => /^late$/i.test(k.trim())) || keys.find(k => /late.*early|early.*late/i.test(k)) || keys.find(k => /late/i.test(k) && !/clock/i.test(k));
     if (lateKey) lv = (row[lateKey]||'').toString().trim();
     const m = parseMins(lv);
-    if (m !== null && m < 8) return null; // under 8 minutes, ignore
-    return '0.5'; // always 0.5 no matter how late
+    if (m !== null && m < 8) return null;
+    return '0.5';
   }
   if (/late.?clock.?out/i.test(type)) return null;
   if (/early/i.test(type)) return null;
   if (/left.?early/i.test(type)) return null;
   if (/late/i.test(type) && !/clock.?in/i.test(type)) return null;
   return null;
+}
+
+function calcLateMinutes(shiftVal, clockVal) {
+  // Calculate actual minutes late from shift start time and clock-in time
+  // shiftVal format: "03:00 PM - 11:00 PM" (we need the start time)
+  // clockVal format: "03:07 PM" or Excel serial like 0.6708333
+  if (!shiftVal || !clockVal) return null;
+
+  // Parse shift start time (first time in the range)
+  const shiftStart = parseTimeToMins(shiftVal.split('-')[0].trim());
+  if (shiftStart === null) return null;
+
+  // Parse clock-in time
+  let clockIn = null;
+  const clockNum = parseFloat(clockVal);
+  if (!isNaN(clockNum) && clockNum > 0 && clockNum < 1) {
+    // Excel time serial: fraction of a day
+    clockIn = Math.round(clockNum * 1440);
+  } else {
+    clockIn = parseTimeToMins(clockVal.trim());
+  }
+  if (clockIn === null) return null;
+
+  let diff = clockIn - shiftStart;
+  // Handle day wraparound (e.g. shift starts 11PM, clocked in 11:07PM next day scenario)
+  if (diff < -720) diff += 1440;
+  if (diff < 0) return null; // clocked in early, not late
+
+  return diff;
+}
+
+function parseTimeToMins(timeStr) {
+  // Parse "3:07 PM", "03:07 PM", "15:07", etc. to minutes since midnight
+  if (!timeStr) return null;
+  const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!match) return null;
+  let h = parseInt(match[1]);
+  const m = parseInt(match[2]);
+  const ampm = (match[3] || '').toUpperCase();
+  if (ampm === 'PM' && h < 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  return h * 60 + m;
 }
 
 function parseMins(s) {
