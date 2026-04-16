@@ -231,6 +231,10 @@ tr.row-hidden{display:none}
           <div class="dropdown-item" data-mode="month" onclick="setViewMode('month')">Month View</div>
         </div>
       </div>
+      <div class="dropdown">
+        <button class="dropdown-btn" id="monthFilterBtn" onclick="toggleMonthFilterDropdown(event)">All Months</button>
+        <div class="dropdown-menu" id="monthFilterMenu"></div>
+      </div>
       <button class="btn" id="hideBtn" onclick="toggleShowHidden()">Show Hidden</button>
       <button class="btn" onclick="openImport()">&#8593; Import</button>
       <button class="btn" onclick="exportCSV()">&#8595; Export</button>
@@ -393,6 +397,7 @@ let editingDate = null;
 let pendingImport = null;
 let viewMode = 'normal'; // 'normal', 'week', 'month'
 let ptsMode = 'annual'; // 'annual', '60days'
+let monthFilter = 'all'; // 'all' or 'YYYY-MM'
 
 function loadData() {
   dataRef.on('value', snap => {
@@ -418,6 +423,7 @@ function toggleViewDropdown(e) {
   e.stopPropagation();
   document.getElementById('viewModeMenu').classList.toggle('active');
   document.getElementById('ptsColMenu').classList.remove('active');
+  document.getElementById('monthFilterMenu').classList.remove('active');
 }
 
 function setViewMode(mode) {
@@ -449,6 +455,47 @@ function togglePtsDropdown(e) {
   menu.style.left = rect.left + 'px';
   menu.classList.toggle('active');
   document.getElementById('viewModeMenu').classList.remove('active');
+  document.getElementById('monthFilterMenu').classList.remove('active');
+}
+
+function toggleMonthFilterDropdown(e) {
+  e.stopPropagation();
+  buildMonthFilterMenu();
+  document.getElementById('monthFilterMenu').classList.toggle('active');
+  document.getElementById('viewModeMenu').classList.remove('active');
+  document.getElementById('ptsColMenu').classList.remove('active');
+}
+
+function buildMonthFilterMenu() {
+  // Collect all unique YYYY-MM keys from allDates, sort newest first
+  const monthSet = new Set();
+  allDates.forEach(d => monthSet.add(d.substring(0, 7)));
+  const months = Array.from(monthSet).sort().reverse();
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const menu = document.getElementById('monthFilterMenu');
+
+  let html = `<div class="dropdown-item ${monthFilter === 'all' ? 'selected' : ''}" data-month="all" onclick="setMonthFilter('all')">All Months</div>`;
+  months.forEach(mk => {
+    const [y, m] = mk.split('-');
+    const label = monthNames[parseInt(m) - 1] + ' ' + y;
+    html += `<div class="dropdown-item ${monthFilter === mk ? 'selected' : ''}" data-month="${mk}" onclick="setMonthFilter('${mk}')">${label}</div>`;
+  });
+  menu.innerHTML = html;
+}
+
+function setMonthFilter(mk) {
+  monthFilter = mk;
+  const btn = document.getElementById('monthFilterBtn');
+  if (mk === 'all') {
+    btn.textContent = 'All Months';
+  } else {
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const [y, m] = mk.split('-');
+    btn.textContent = monthNames[parseInt(m) - 1] + ' ' + y;
+  }
+  document.getElementById('monthFilterMenu').classList.remove('active');
+  renderTable();
 }
 
 // Close dropdowns on outside click
@@ -456,6 +503,7 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.dropdown') && !e.target.closest('.header-dropdown') && !e.target.closest('#ptsColMenu')) {
     document.getElementById('viewModeMenu').classList.remove('active');
     document.getElementById('ptsColMenu').classList.remove('active');
+    document.getElementById('monthFilterMenu').classList.remove('active');
   }
 });
 
@@ -709,17 +757,60 @@ function getAnnualPts(dates) {
   return pts;
 }
 
+// Parse various date string formats into a Date object (returns null if unparseable)
+function parseDate(dateStr) {
+  if (!dateStr) return null;
+  const s = dateStr.toString().trim();
+  // ISO format YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = new Date(s.substring(0, 10) + 'T00:00:00');
+    return isNaN(d) ? null : d;
+  }
+  // Slash format M/D/YYYY or MM/DD/YYYY
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (slash) {
+    let [, m, d, y] = slash;
+    y = y.length === 2 ? '20' + y : y;
+    const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+    return isNaN(dt) ? null : dt;
+  }
+  // Fallback: try native parser
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
 // Sum points from last 60 days relative to most recent date in ALL data
 function getLast60Pts(dates) {
   if (!allDates.length) return 0;
-  const mostRecent = allDates[allDates.length - 1];
-  const cutoffDate = new Date(mostRecent + 'T00:00:00');
-  cutoffDate.setDate(cutoffDate.getDate() - 60);
-  const cutoffStr = cutoffDate.toISOString().split('T')[0];
-  let pts = 0;
-  Object.entries(dates).forEach(([d, v]) => {
-    if (d >= cutoffStr) pts += getPoints(v);
+  // Find the truly most recent date by parsing each one, not by string sort
+  let mostRecent = null;
+  allDates.forEach(d => {
+    const dt = parseDate(d);
+    if (dt && (!mostRecent || dt > mostRecent)) mostRecent = dt;
   });
+  if (!mostRecent) return 0;
+
+  const cutoff = new Date(mostRecent);
+  cutoff.setDate(cutoff.getDate() - 60);
+
+  let pts = 0;
+  const included = [], excluded = [];
+  Object.entries(dates).forEach(([d, v]) => {
+    const entryDate = parseDate(d);
+    if (!entryDate) { excluded.push([d, v, 'UNPARSEABLE']); return; }
+    if (entryDate >= cutoff) {
+      pts += getPoints(v);
+      if (getPoints(v) > 0) included.push([d, v]);
+    } else {
+      if (getPoints(v) > 0) excluded.push([d, v, 'before cutoff ' + cutoff.toISOString().substring(0,10)]);
+    }
+  });
+  // Debug: log once per person (only if they have data)
+  if (window._debug60 && Object.keys(dates).length > 0) {
+    console.log('60-day calc | cutoff:', cutoff.toISOString().substring(0,10),
+                '| mostRecent:', mostRecent.toISOString().substring(0,10),
+                '| included:', included, '| excluded:', excluded, '| total pts:', pts);
+  }
   return pts;
 }
 
@@ -877,12 +968,39 @@ function renderTable() {
   const periodInfo = buildPeriods();
   const ptsLabel = ptsMode === '60days' ? 'Last 60 Days' : 'Annual Pts';
 
+  // Filter dates/periods by selected month
+  const filteredDates = monthFilter === 'all' ? allDates : allDates.filter(d => d.substring(0, 7) === monthFilter);
+  let filteredPeriods = null;
+  if (periodInfo) {
+    if (monthFilter === 'all') {
+      filteredPeriods = periodInfo.periods;
+    } else {
+      // For week view, include any week that has a day in the selected month
+      // For month view, only include the selected month itself
+      if (viewMode === 'month') {
+        filteredPeriods = periodInfo.periods.filter(p => p === monthFilter);
+      } else {
+        // Week view: filter weeks that overlap with the selected month
+        filteredPeriods = periodInfo.periods.filter(p => {
+          // A week starts at p (YYYY-MM-DD Monday) and spans 7 days
+          const start = new Date(p + 'T00:00:00');
+          for (let i = 0; i < 7; i++) {
+            const day = new Date(start);
+            day.setDate(start.getDate() + i);
+            if (day.toISOString().substring(0, 7) === monthFilter) return true;
+          }
+          return false;
+        });
+      }
+    }
+  }
+
   // Build header
   let headerCols;
   if (periodInfo) {
-    headerCols = periodInfo.periods.map(p => `<th class="period-col">${periodInfo.fmtFn(p)}</th>`).join('');
+    headerCols = filteredPeriods.map(p => `<th class="period-col">${periodInfo.fmtFn(p)}</th>`).join('');
   } else {
-    headerCols = allDates.map(d => `<th class="date-col">${fmtDate(d)}</th>`).join('');
+    headerCols = filteredDates.map(d => `<th class="date-col">${fmtDate(d)}</th>`).join('');
   }
 
   document.getElementById('tableHead').innerHTML = `<tr>
@@ -921,14 +1039,14 @@ function renderTable() {
     // Build date/period cells
     let cells;
     if (periodInfo) {
-      cells = periodInfo.periods.map(p => {
+      cells = filteredPeriods.map(p => {
         const pts = getPeriodPoints(dates, p, periodInfo.keyFn);
         const display = pts === 0 ? '<span style="color:var(--text-muted)">·</span>' : (pts % 1 === 0 ? pts : pts.toFixed(1));
         const colorCls = pts > 0 ? ptsColor(pts) : '';
         return `<td class="period-cell ${colorCls}">${display}</td>`;
       }).join('');
     } else {
-      cells = allDates.map(d => {
+      cells = filteredDates.map(d => {
         const v = dates[d] || '';
         return `<td class="date-cell" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')">${cellHtml(v)}</td>`;
       }).join('');
