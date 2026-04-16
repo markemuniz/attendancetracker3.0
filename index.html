@@ -157,7 +157,7 @@ tr.row-hidden{display:none}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
 
 .import-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;width:500px;max-width:92vw;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.5);animation:fadeUp 0.25s ease both}
-.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:44px 20px;cursor:pointer;transition:all 0.2s;margin-bottom:14px}
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:44px 20px;cursor:pointer;transition:all 0.2s;margin-bottom:14px;user-select:none}
 .drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);background:var(--accent-glow)}
 .drop-zone p{color:var(--text-muted);font-size:0.85rem}
 .drop-zone p strong{color:var(--text)}
@@ -301,8 +301,8 @@ tr.row-hidden{display:none}
     <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px;">Upload the Excel attendance file from your timeclock system</p>
     <div class="drop-zone" id="dropZone">
       <p><strong>Drop .xlsx file here</strong><br>or click to browse</p>
-      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
     </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
     <div class="import-preview" id="importPreview"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
       <button class="btn" onclick="closeImport()">Cancel</button>
