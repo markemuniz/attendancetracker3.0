@@ -69,6 +69,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .btn.danger{color:var(--red);border-color:rgba(255,107,122,0.25)}
 .btn.danger:hover{background:rgba(255,107,122,0.08)}
 
+/* Dropdown */
+.dropdown{position:relative;display:inline-block}
+.dropdown-btn{padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.75rem;font-weight:500;cursor:pointer;transition:all 0.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.dropdown-btn:hover{background:var(--surface3);border-color:var(--border-light)}
+.dropdown-btn::after{content:'▾';font-size:0.65rem;opacity:0.7}
+.dropdown-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:50;min-width:140px;overflow:hidden}
+.dropdown-menu.active{display:block}
+.dropdown-item{padding:8px 12px;cursor:pointer;font-size:0.75rem;color:var(--text);transition:background 0.1s;white-space:nowrap}
+.dropdown-item:hover{background:var(--surface2)}
+.dropdown-item.selected{background:var(--accent-glow);color:var(--accent)}
+
+/* Header dropdown (for Annual Pts column) */
+.header-dropdown{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.header-dropdown::after{content:'▾';font-size:0.6rem;opacity:0.7}
+.header-dropdown:hover{color:var(--text-dim)}
+
 /* Table */
 .table-wrap{height:calc(100vh - 140px);overflow:auto}
 table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:0.78rem}
@@ -76,36 +92,39 @@ thead th{position:sticky;top:0;z-index:20;background:var(--surface);padding:10px
 thead th:last-child{border-right:none}
 thead th:nth-child(1),thead th:nth-child(2),thead th:nth-child(3),thead th:nth-child(4){position:sticky;z-index:30;background:var(--surface)}
 thead th:nth-child(1){left:0;min-width:90px}
-thead th:nth-child(2){left:90px;min-width:100px}
-thead th:nth-child(3){left:190px;min-width:75px;text-align:center}
-thead th:nth-child(4){left:265px;min-width:85px;text-align:center;border-right:1px solid rgba(108,140,255,0.25)}
+thead th:nth-child(2){left:90px;min-width:140px}
+thead th:nth-child(3){left:230px;min-width:110px;text-align:center}
+thead th:nth-child(4){left:340px;min-width:95px;text-align:center;border-right:1px solid rgba(108,140,255,0.25)}
 
 tbody td{padding:8px 12px;border-bottom:1px solid rgba(46,49,70,0.35);border-right:1px solid rgba(46,49,70,0.35);white-space:nowrap}
 tbody td:last-child{border-right:none}
 tbody td:nth-child(1),tbody td:nth-child(2),tbody td:nth-child(3),tbody td:nth-child(4){position:sticky;z-index:10;background:var(--bg)}
 tbody td:nth-child(1){left:0;min-width:90px}
-tbody td:nth-child(2){left:90px;min-width:100px}
-tbody td:nth-child(3){left:190px;min-width:75px;text-align:center;font-weight:600}
-tbody td:nth-child(4){left:265px;min-width:85px;text-align:center;font-weight:600;border-right:1px solid rgba(108,140,255,0.25)}
+tbody td:nth-child(2){left:90px;min-width:140px}
+tbody td:nth-child(3){left:230px;min-width:110px;text-align:center;font-weight:600}
+tbody td:nth-child(4){left:340px;min-width:95px;text-align:center;font-weight:600;border-right:1px solid rgba(108,140,255,0.25)}
 
 tbody td.date-cell{text-align:center;cursor:pointer;min-width:55px;transition:background 0.1s;font-weight:600;font-size:0.78rem}
 tbody td.date-cell:hover{background:var(--surface2)}
+tbody td.period-cell{text-align:center;cursor:default;min-width:80px;transition:background 0.1s;font-weight:600;font-size:0.8rem}
 thead th.date-col{text-align:center;min-width:55px}
+thead th.period-col{text-align:center;min-width:80px}
 tbody tr:hover td{background:var(--surface)}
 tbody tr:hover td:nth-child(1),tbody tr:hover td:nth-child(2),tbody tr:hover td:nth-child(3),tbody tr:hover td:nth-child(4){background:var(--surface)}
 
-/* Name badges */
+/* Name badges - simplified 3-tier system */
 .name-badge{display:inline-block;padding:3px 10px;border-radius:5px;font-size:0.75rem;font-weight:600;border:1px solid}
 .name-green{color:#4ade80;border-color:rgba(74,222,128,0.35);background:rgba(74,222,128,0.08)}
-.name-yellow{color:#facc15;border-color:rgba(250,204,21,0.35);background:rgba(250,204,21,0.08)}
 .name-orange{color:#f59e0b;border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.08)}
 .name-red{color:#ff6b7a;border-color:rgba(255,107,122,0.35);background:rgba(255,107,122,0.08)}
-.name-blue{color:#6c8cff;border-color:rgba(108,140,255,0.35);background:rgba(108,140,255,0.08)}
-.name-purple{color:#a78bfa;border-color:rgba(167,139,250,0.35);background:rgba(167,139,250,0.08)}
-.name-plain{color:var(--text);border-color:transparent;background:transparent;padding:3px 0}
-.name-perfect{color:#ffd700;border-color:rgba(255,215,0,0.4);background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,180,0,0.05));text-shadow:0 0 8px rgba(255,215,0,0.3);animation:shimmer 3s ease-in-out infinite}
-@keyframes shimmer{0%,100%{text-shadow:0 0 8px rgba(255,215,0,0.3)}50%{text-shadow:0 0 16px rgba(255,215,0,0.6),0 0 30px rgba(255,215,0,0.2)}}
 .name-terminated{color:#ff6b7a;border-color:rgba(255,107,122,0.35);background:rgba(255,107,122,0.08);text-decoration:line-through}
+
+/* Write-up tag next to name */
+.writeup-tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.65rem;font-weight:700;margin-left:6px;letter-spacing:0.03em;text-transform:uppercase;vertical-align:middle;border:1px solid}
+.wu-1st{color:#6c8cff;border-color:rgba(108,140,255,0.4);background:rgba(108,140,255,0.1)}
+.wu-2nd{color:#facc15;border-color:rgba(250,204,21,0.4);background:rgba(250,204,21,0.1)}
+.wu-final{color:#f59e0b;border-color:rgba(245,158,11,0.4);background:rgba(245,158,11,0.1)}
+.wu-term{color:#ff6b7a;border-color:rgba(255,107,122,0.4);background:rgba(255,107,122,0.1)}
 
 /* Hidden rows */
 tr.row-hidden{display:none}
@@ -115,8 +134,8 @@ tr.row-hidden{display:none}
 .val-one{color:#ff6b7a}
 .val-excused{color:#6c8cff}
 .val-1st{color:#6c8cff}
-.val-2nd{color:#a78bfa}
-.val-final{color:#ff6b7a}
+.val-2nd{color:#facc15}
+.val-final{color:#f59e0b}
 .val-term{color:#ff6b7a}
 
 /* Point column colors */
@@ -194,13 +213,9 @@ tr.row-hidden{display:none}
   <div class="key-section">
     <div class="key-title">KEY</div>
     <div class="key-row">
-      <div class="key-item"><div class="key-swatch" style="background:#4ade80"></div> NC/NS</div>
-      <div class="key-item"><div class="key-swatch" style="background:#6c8cff"></div> Excused</div>
-      <div class="key-item"><div class="key-swatch" style="background:#f59e0b"></div> Excused Lateness</div>
-      <div class="key-sep"></div>
       <div class="key-item"><div class="key-swatch" style="background:#6c8cff"></div> 1st</div>
-      <div class="key-item"><div class="key-swatch" style="background:#a78bfa"></div> 2nd</div>
-      <div class="key-item"><div class="key-swatch" style="background:#ff6b7a"></div> Final</div>
+      <div class="key-item"><div class="key-swatch" style="background:#facc15"></div> 2nd</div>
+      <div class="key-item"><div class="key-swatch" style="background:#f59e0b"></div> Final</div>
       <div class="key-item"><div class="key-swatch" style="background:#ef4444"></div> Terminated</div>
     </div>
   </div>
@@ -208,6 +223,14 @@ tr.row-hidden{display:none}
   <div class="toolbar">
     <input class="search-box" id="searchBox" type="text" placeholder="Search budtenders..." oninput="renderTable()">
     <div class="toolbar-right">
+      <div class="dropdown">
+        <button class="dropdown-btn" id="viewModeBtn" onclick="toggleViewDropdown(event)">Normal View</button>
+        <div class="dropdown-menu" id="viewModeMenu">
+          <div class="dropdown-item selected" data-mode="normal" onclick="setViewMode('normal')">Normal View</div>
+          <div class="dropdown-item" data-mode="week" onclick="setViewMode('week')">Week View</div>
+          <div class="dropdown-item" data-mode="month" onclick="setViewMode('month')">Month View</div>
+        </div>
+      </div>
       <button class="btn" id="hideBtn" onclick="toggleShowHidden()">Show Hidden</button>
       <button class="btn" onclick="openImport()">&#8593; Import</button>
       <button class="btn" onclick="exportCSV()">&#8595; Export</button>
@@ -226,6 +249,12 @@ tr.row-hidden{display:none}
       <tbody id="tableBody"></tbody>
     </table>
   </div>
+</div>
+
+<!-- Points Column Dropdown (floating) -->
+<div class="dropdown-menu" id="ptsColMenu" style="position:fixed;z-index:100">
+  <div class="dropdown-item selected" data-mode="annual" onclick="setPtsMode('annual')">Annual Pts</div>
+  <div class="dropdown-item" data-mode="60days" onclick="setPtsMode('60days')">Last 60 Days</div>
 </div>
 
 <!-- Edit Modal -->
@@ -247,8 +276,8 @@ tr.row-hidden{display:none}
     </div>
     <div class="modal-btns">
       <button class="btn" style="color:#6c8cff;border-color:rgba(108,140,255,0.4)" onclick="fillEdit('1st')">1st</button>
-      <button class="btn" style="color:#4ade80;border-color:rgba(74,222,128,0.4)" onclick="fillEdit('2nd')">2nd</button>
-      <button class="btn" style="color:#ff6b7a;border-color:rgba(255,107,122,0.4)" onclick="fillEdit('Final')">Final</button>
+      <button class="btn" style="color:#facc15;border-color:rgba(250,204,21,0.4)" onclick="fillEdit('2nd')">2nd</button>
+      <button class="btn" style="color:#f59e0b;border-color:rgba(245,158,11,0.4)" onclick="fillEdit('Final')">Final</button>
       <button class="btn" style="color:#ef4444;border-color:rgba(239,68,68,0.4)" onclick="fillEdit('Terminated')">Terminated</button>
       <button class="btn" style="color:#a78bfa;border-color:rgba(167,139,250,0.4)" onclick="fillEdit('Completed')">Completed</button>
     </div>
@@ -362,6 +391,8 @@ let allDates = [];
 let editingPerson = null;
 let editingDate = null;
 let pendingImport = null;
+let viewMode = 'normal'; // 'normal', 'week', 'month'
+let ptsMode = 'annual'; // 'annual', '60days'
 
 function loadData() {
   dataRef.on('value', snap => {
@@ -379,6 +410,54 @@ function saveData() {
   dataRef.set(attendanceData).catch(err => toast('Save failed: ' + err.message, 'error'));
   localStorage.setItem('bt_attendance', JSON.stringify(attendanceData));
 }
+
+// ═══════════════════════════════════════
+// DROPDOWNS
+// ═══════════════════════════════════════
+function toggleViewDropdown(e) {
+  e.stopPropagation();
+  document.getElementById('viewModeMenu').classList.toggle('active');
+  document.getElementById('ptsColMenu').classList.remove('active');
+}
+
+function setViewMode(mode) {
+  viewMode = mode;
+  const labels = { normal: 'Normal View', week: 'Week View', month: 'Month View' };
+  document.getElementById('viewModeBtn').textContent = labels[mode];
+  document.querySelectorAll('#viewModeMenu .dropdown-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.mode === mode);
+  });
+  document.getElementById('viewModeMenu').classList.remove('active');
+  renderTable();
+}
+
+function setPtsMode(mode) {
+  ptsMode = mode;
+  document.querySelectorAll('#ptsColMenu .dropdown-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.mode === mode);
+  });
+  document.getElementById('ptsColMenu').classList.remove('active');
+  renderTable();
+}
+
+function togglePtsDropdown(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('ptsColMenu');
+  const btn = e.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  menu.style.top = (rect.bottom + 4) + 'px';
+  menu.style.left = rect.left + 'px';
+  menu.classList.toggle('active');
+  document.getElementById('viewModeMenu').classList.remove('active');
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dropdown') && !e.target.closest('.header-dropdown') && !e.target.closest('#ptsColMenu')) {
+    document.getElementById('viewModeMenu').classList.remove('active');
+    document.getElementById('ptsColMenu').classList.remove('active');
+  }
+});
 
 // ═══════════════════════════════════════
 // IMPORT
@@ -441,7 +520,6 @@ function parseIncidentLog(rows, nameCol, dateCol, typeCol) {
     const val = mapType(type, row);
     if (val) {
       parsed[sk].dates[ds] = val;
-      // Store the reason/minutes as a note
       const keys = Object.keys(row);
       const lateKey = keys.find(k => /late.*early|early.*late/i.test(k)) || keys.find(k => /^late$/i.test(k.trim()));
       const shiftKey = keys.find(k => /shift.?time/i.test(k));
@@ -449,7 +527,6 @@ function parseIncidentLog(rows, nameCol, dateCol, typeCol) {
       const lateInfo = lateKey ? (row[lateKey]||'').toString().trim() : '';
       const shiftTime = shiftKey ? (row[shiftKey]||'').toString().trim() : '';
       let clockTime = clockKey ? (row[clockKey]||'').toString().trim() : '';
-      // Convert Excel time serial to readable time
       if (clockTime && !isNaN(parseFloat(clockTime)) && parseFloat(clockTime) < 1) {
         const totalMins = Math.round(parseFloat(clockTime) * 1440);
         const h = Math.floor(totalMins / 60);
@@ -469,28 +546,24 @@ function parseIncidentLog(rows, nameCol, dateCol, typeCol) {
 }
 
 function mapType(type, row) {
-  // Skip ambassador shifts entirely - check Position column and all values
   const pos = (row['Position']||'').toString().toLowerCase();
   const allVals = Object.values(row).map(v => (v||'').toString().toLowerCase()).join(' ');
   if (/ambassador/i.test(pos) || /ambassador/i.test(allVals)) return null;
 
   if (/no.?show/i.test(type)) return '1';
   if (/late/i.test(type) && /clock.?in/i.test(type)) {
-    // Calculate actual late minutes from clock times instead of trusting CSV's reported value
     const keys = Object.keys(row);
     const shiftKey = keys.find(k => /shift.?time/i.test(k));
     const clockKey = keys.find(k => /clock.?in.*out|clock.?time/i.test(k));
     const shiftVal = shiftKey ? (row[shiftKey]||'').toString().trim() : '';
     const clockVal = clockKey ? (row[clockKey]||'').toString().trim() : '';
 
-    // Try to calculate real minutes from shift start vs clock-in
     const realMins = calcLateMinutes(shiftVal, clockVal);
     if (realMins !== null) {
-      if (realMins < 8) return null; // under 8 real minutes, ignore
+      if (realMins < 8) return null;
       return '0.5';
     }
 
-    // Fallback: use the reported Late/Early column if clock times unavailable
     let lv = '';
     const lateKey = keys.find(k => /^late$/i.test(k.trim())) || keys.find(k => /late.*early|early.*late/i.test(k)) || keys.find(k => /late/i.test(k) && !/clock/i.test(k));
     if (lateKey) lv = (row[lateKey]||'').toString().trim();
@@ -506,36 +579,24 @@ function mapType(type, row) {
 }
 
 function calcLateMinutes(shiftVal, clockVal) {
-  // Calculate actual minutes late from shift start time and clock-in time
-  // shiftVal format: "03:00 PM - 11:00 PM" (we need the start time)
-  // clockVal format: "03:07 PM" or Excel serial like 0.6708333
   if (!shiftVal || !clockVal) return null;
-
-  // Parse shift start time (first time in the range)
   const shiftStart = parseTimeToMins(shiftVal.split('-')[0].trim());
   if (shiftStart === null) return null;
-
-  // Parse clock-in time
   let clockIn = null;
   const clockNum = parseFloat(clockVal);
   if (!isNaN(clockNum) && clockNum > 0 && clockNum < 1) {
-    // Excel time serial: fraction of a day
     clockIn = Math.round(clockNum * 1440);
   } else {
     clockIn = parseTimeToMins(clockVal.trim());
   }
   if (clockIn === null) return null;
-
   let diff = clockIn - shiftStart;
-  // Handle day wraparound (e.g. shift starts 11PM, clocked in 11:07PM next day scenario)
   if (diff < -720) diff += 1440;
-  if (diff < 0) return null; // clocked in early, not late
-
+  if (diff < 0) return null;
   return diff;
 }
 
 function parseTimeToMins(timeStr) {
-  // Parse "3:07 PM", "03:07 PM", "15:07", etc. to minutes since midnight
   if (!timeStr) return null;
   const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   if (!match) return null;
@@ -549,7 +610,6 @@ function parseTimeToMins(timeStr) {
 
 function parseMins(s) {
   if (!s) return null;
-  // Handle "14 minutes" or "1 hour 14 minutes" format
   const minMatch = s.match(/(\d+)\s*min/i);
   if (minMatch) {
     let total = parseInt(minMatch[1]) || 0;
@@ -557,14 +617,10 @@ function parseMins(s) {
     if (hrMatch) total += (parseInt(hrMatch[1]) || 0) * 60;
     return total;
   }
-  // Handle "HH:MM:SS" or "MM:SS"
   const hms = s.match(/(\d+):(\d+)/);
   if (hms) return (parseInt(hms[1])||0)*60+(parseInt(hms[2])||0);
-  // Handle plain number
   const n = parseFloat(s);
   if (isNaN(n)) return null;
-  // Excel time serial: fractions of a day (e.g. 0.00486 = 7 min)
-  // If the number is less than 1, treat it as a fraction of a day
   if (n > 0 && n < 1) return Math.round(n * 1440);
   return n;
 }
@@ -611,7 +667,7 @@ function confirmImport() {
 }
 
 // ═══════════════════════════════════════
-// TABLE
+// TABLE & CALCULATIONS
 // ═══════════════════════════════════════
 function rebuildDates() {
   const s = new Set();
@@ -628,11 +684,8 @@ function getPoints(val) {
 }
 
 function getWriteupPts(dates) {
-  // Find the most recent write-up date, then sum attendance points after it
   const writeupTypes = ['1st','2nd','final','terminated','term','completed'];
   let lastWriteupDate = null;
-
-  // Sort dates chronologically and find the latest write-up
   const sortedEntries = Object.entries(dates).sort((a,b) => a[0].localeCompare(b[0]));
   sortedEntries.forEach(([d, v]) => {
     const val = (v||'').toString().trim().toLowerCase();
@@ -640,11 +693,7 @@ function getWriteupPts(dates) {
       lastWriteupDate = d;
     }
   });
-
-  // No write-up? Show 0
   if (!lastWriteupDate) return 0;
-
-  // Sum points that come AFTER the write-up date
   let pts = 0;
   sortedEntries.forEach(([d, v]) => {
     if (d > lastWriteupDate) {
@@ -657,6 +706,20 @@ function getWriteupPts(dates) {
 function getAnnualPts(dates) {
   let pts = 0;
   Object.values(dates).forEach(v => { pts += getPoints(v); });
+  return pts;
+}
+
+// Sum points from last 60 days relative to most recent date in ALL data
+function getLast60Pts(dates) {
+  if (!allDates.length) return 0;
+  const mostRecent = allDates[allDates.length - 1];
+  const cutoffDate = new Date(mostRecent + 'T00:00:00');
+  cutoffDate.setDate(cutoffDate.getDate() - 60);
+  const cutoffStr = cutoffDate.toISOString().split('T')[0];
+  let pts = 0;
+  Object.entries(dates).forEach(([d, v]) => {
+    if (d >= cutoffStr) pts += getPoints(v);
+  });
   return pts;
 }
 
@@ -675,17 +738,27 @@ function getLatestWriteup(dates) {
   return latest;
 }
 
-function getNameColor(annualPts, terminated, dates) {
+// Name color based on points (not occurrence count):
+//   0-1 pts = green, 1.5-2.5 pts = orange, 3+ pts = red
+// If budtender has a write-up, use write-up pts; otherwise use last 60 days pts
+function getNameColor(dates, terminated) {
   if (terminated) return 'name-terminated';
-  const wu = dates ? getLatestWriteup(dates) : null;
-  if (wu === 'final') return 'name-red';
-  if (wu === '2nd') return 'name-purple';
-  if (wu === '1st') return 'name-blue';
-  if (annualPts >= 3) return 'name-red';
-  if (annualPts >= 2) return 'name-orange';
-  if (annualPts >= 1) return 'name-yellow';
-  if (annualPts > 0) return 'name-green';
-  return 'name-perfect';
+  const hasWriteup = getLatestWriteup(dates) !== null;
+  const pts = hasWriteup ? getWriteupPts(dates) : getLast60Pts(dates);
+  if (pts >= 3) return 'name-red';
+  if (pts >= 1.5) return 'name-orange';
+  return 'name-green'; // 0 - 1 pts
+}
+
+// Get write-up tag HTML for name display
+function getWriteupTagHtml(dates) {
+  const wu = getLatestWriteup(dates);
+  if (!wu) return '';
+  if (wu === '1st') return '<span class="writeup-tag wu-1st">1st</span>';
+  if (wu === '2nd') return '<span class="writeup-tag wu-2nd">2nd</span>';
+  if (wu === 'final') return '<span class="writeup-tag wu-final">Final</span>';
+  if (wu === 'terminated' || wu === 'term') return '<span class="writeup-tag wu-term">Term</span>';
+  return '';
 }
 
 let showHidden = false;
@@ -743,6 +816,53 @@ function fmtDate(d) {
   } catch(e) { return d; }
 }
 
+// ═══════════════════════════════════════
+// WEEK / MONTH GROUPING
+// ═══════════════════════════════════════
+function getWeekKey(dateStr) {
+  // Returns ISO week start date (Monday) as YYYY-MM-DD
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split('T')[0];
+}
+
+function getMonthKey(dateStr) {
+  return dateStr.substring(0, 7); // YYYY-MM
+}
+
+function fmtWeek(weekKey) {
+  const d = new Date(weekKey + 'T00:00:00');
+  const end = new Date(d);
+  end.setDate(d.getDate() + 6);
+  return (d.getMonth()+1) + '/' + d.getDate() + ' - ' + (end.getMonth()+1) + '/' + end.getDate();
+}
+
+function fmtMonth(monthKey) {
+  const [y, m] = monthKey.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[parseInt(m)-1] + ' ' + y.substring(2);
+}
+
+function buildPeriods() {
+  if (viewMode === 'normal') return null;
+  const keyFn = viewMode === 'week' ? getWeekKey : getMonthKey;
+  const fmtFn = viewMode === 'week' ? fmtWeek : fmtMonth;
+  const periodSet = new Set();
+  allDates.forEach(d => periodSet.add(keyFn(d)));
+  const periods = Array.from(periodSet).sort();
+  return { periods, keyFn, fmtFn };
+}
+
+function getPeriodPoints(dates, periodKey, keyFn) {
+  let pts = 0;
+  Object.entries(dates).forEach(([d, v]) => {
+    if (keyFn(d) === periodKey) pts += getPoints(v);
+  });
+  return pts;
+}
+
 function renderTable() {
   const q = (document.getElementById('searchBox').value||'').toLowerCase();
   const people = Object.entries(attendanceData).filter(([k,v])=>(v.displayName||k).toLowerCase().includes(q)).sort((a,b)=>(a[1].displayName||a[0]).localeCompare(b[1].displayName||b[0]));
@@ -754,20 +874,32 @@ function renderTable() {
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('mainTable').style.display = '';
 
+  const periodInfo = buildPeriods();
+  const ptsLabel = ptsMode === '60days' ? 'Last 60 Days' : 'Annual Pts';
+
+  // Build header
+  let headerCols;
+  if (periodInfo) {
+    headerCols = periodInfo.periods.map(p => `<th class="period-col">${periodInfo.fmtFn(p)}</th>`).join('');
+  } else {
+    headerCols = allDates.map(d => `<th class="date-col">${fmtDate(d)}</th>`).join('');
+  }
+
   document.getElementById('tableHead').innerHTML = `<tr>
-    <th>First Name</th><th>Last Name</th><th>Annual Pts</th><th>Write-Up Pts</th>
-    ${allDates.map(d=>`<th class="date-col">${fmtDate(d)}</th>`).join('')}
+    <th>First Name</th>
+    <th>Last Name</th>
+    <th><span class="header-dropdown" onclick="togglePtsDropdown(event)">${ptsLabel}</span></th>
+    <th>Write-Up Pts</th>
+    ${headerCols}
   </tr>`;
 
   document.getElementById('tableBody').innerHTML = people.map(([key,person])=>{
     const name = person.displayName || key;
     let fn = '', ln = '';
     if (name.includes(',')) {
-      // "Last, First" format
       const parts = name.split(',').map(s=>s.trim());
       ln = parts[0]; fn = parts[1] || '';
     } else {
-      // "First Last" format
       const parts = name.split(' ').map(s=>s.trim()).filter(Boolean);
       if (parts.length >= 2) {
         fn = parts[0];
@@ -778,22 +910,36 @@ function renderTable() {
       }
     }
     const dates = person.dates || {};
-    const ap = getAnnualPts(dates);
+    const mainPts = ptsMode === '60days' ? getLast60Pts(dates) : getAnnualPts(dates);
     const wp = getWriteupPts(dates);
     if (!showHidden && person.hidden) return '';
 
     const termed = isTerminated(dates);
-    const nc = getNameColor(ap, termed, dates);
+    const nc = getNameColor(dates, termed);
+    const wuTag = getWriteupTagHtml(dates);
+
+    // Build date/period cells
+    let cells;
+    if (periodInfo) {
+      cells = periodInfo.periods.map(p => {
+        const pts = getPeriodPoints(dates, p, periodInfo.keyFn);
+        const display = pts === 0 ? '<span style="color:var(--text-muted)">·</span>' : (pts % 1 === 0 ? pts : pts.toFixed(1));
+        const colorCls = pts > 0 ? ptsColor(pts) : '';
+        return `<td class="period-cell ${colorCls}">${display}</td>`;
+      }).join('');
+    } else {
+      cells = allDates.map(d => {
+        const v = dates[d] || '';
+        return `<td class="date-cell" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')">${cellHtml(v)}</td>`;
+      }).join('');
+    }
 
     return `<tr>
       <td><span class="name-badge ${nc}">${fn}</span></td>
-      <td><span class="name-badge ${nc}">${ln}</span></td>
-      <td class="${ptsColor(ap)}">${ap > 0 ? ap % 1 === 0 ? ap : ap.toFixed(1) : '0'}</td>
+      <td><span class="name-badge ${nc}">${ln}</span>${wuTag}</td>
+      <td class="${ptsColor(mainPts)}">${mainPts > 0 ? mainPts % 1 === 0 ? mainPts : mainPts.toFixed(1) : '0'}</td>
       <td class="${ptsColor(wp)}">${wp > 0 ? wp % 1 === 0 ? wp : wp.toFixed(1) : '0'}</td>
-      ${allDates.map(d => {
-        const v = dates[d] || '';
-        return `<td class="date-cell" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')">${cellHtml(v)}</td>`;
-      }).join('')}
+      ${cells}
     </tr>`;
   }).join('');
 }
@@ -817,7 +963,6 @@ function openEdit(pk,dt) {
   const input = document.getElementById('editInput');
   const currentVal = (p && p.dates && p.dates[dt]) ? p.dates[dt] : '';
   input.value = currentVal;
-  // Show note if available
   const noteEl = document.getElementById('editNote');
   const note = (p && p.notes && p.notes[dt]) ? p.notes[dt] : '';
   if (note) {
@@ -872,15 +1017,15 @@ function setCell(val) {
 function exportCSV() {
   if (!Object.keys(attendanceData).length) { toast('No data', 'error'); return; }
   rebuildDates();
-  let csv = 'First Name,Last Name,Annual Pts,Write-Up Pts,' + allDates.map(d=>fmtDate(d)).join(',') + '\n';
+  let csv = 'First Name,Last Name,Annual Pts,Last 60 Days,Write-Up Pts,' + allDates.map(d=>fmtDate(d)).join(',') + '\n';
   Object.entries(attendanceData).sort((a,b)=>(a[1].displayName||a[0]).localeCompare(b[1].displayName||b[0])).forEach(([k,p]) => {
     const name = p.displayName||k;
     let fn = '', ln = '';
     if (name.includes(',')) { const pts = name.split(',').map(s=>s.trim()); ln = pts[0]; fn = pts[1]||''; }
     else { const pts = name.split(' ').filter(Boolean); fn = pts[0]||''; ln = pts.slice(1).join(' '); }
     const dates = p.dates||{};
-    const ap = getAnnualPts(dates), wp = getWriteupPts(dates);
-    csv += `"${fn}","${ln}",${ap},${wp},${allDates.map(d=>dates[d]||'').join(',')}\n`;
+    const ap = getAnnualPts(dates), l60 = getLast60Pts(dates), wp = getWriteupPts(dates);
+    csv += `"${fn}","${ln}",${ap},${l60},${wp},${allDates.map(d=>dates[d]||'').join(',')}\n`;
   });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
