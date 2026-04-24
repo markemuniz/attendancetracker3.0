@@ -104,13 +104,16 @@ tbody td:nth-child(2){left:90px;min-width:140px}
 tbody td:nth-child(3){left:230px;min-width:110px;text-align:center;font-weight:600}
 tbody td:nth-child(4){left:340px;min-width:95px;text-align:center;font-weight:600;border-right:1px solid rgba(108,140,255,0.25)}
 
-tbody td.date-cell{text-align:center;cursor:pointer;min-width:55px;transition:background 0.1s;font-weight:600;font-size:0.78rem}
+tbody td.date-cell{text-align:center;cursor:pointer;min-width:55px;transition:background 0.1s;font-weight:600;font-size:0.78rem;position:relative}
 tbody td.date-cell:hover{background:var(--surface2)}
 tbody td.period-cell{text-align:center;cursor:default;min-width:80px;transition:background 0.1s;font-weight:600;font-size:0.8rem}
 thead th.date-col{text-align:center;min-width:55px}
 thead th.period-col{text-align:center;min-width:80px}
 tbody tr:hover td{background:var(--surface)}
 tbody tr:hover td:nth-child(1),tbody tr:hover td:nth-child(2),tbody tr:hover td:nth-child(3),tbody tr:hover td:nth-child(4){background:var(--surface)}
+
+/* Note star indicator */
+.note-star{position:absolute;top:2px;right:3px;font-size:0.6rem;color:#facc15;line-height:1;pointer-events:none;filter:drop-shadow(0 0 2px rgba(250,204,21,0.4))}
 
 /* Name badges - simplified 3-tier system */
 .name-badge{display:inline-block;padding:3px 10px;border-radius:5px;font-size:0.75rem;font-weight:600;border:1px solid}
@@ -148,13 +151,21 @@ tr.row-hidden{display:none}
 /* Modals */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .modal-overlay.active{display:flex}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:420px;max-width:92vw;box-shadow:0 24px 80px rgba(0,0,0,0.5);animation:fadeUp 0.25s ease both}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:440px;max-width:92vw;box-shadow:0 24px 80px rgba(0,0,0,0.5);animation:fadeUp 0.25s ease both;max-height:92vh;overflow-y:auto}
 .modal h3{font-size:1rem;font-weight:700;margin-bottom:4px}
 .modal .subtitle{font-size:0.8rem;color:var(--text-muted);margin-bottom:18px}
 .modal-btns{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
 .modal-btns .btn{font-size:0.72rem;padding:5px 10px}
 .modal-section-label{font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+
+/* Note textarea */
+.note-input{width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:0.85rem;outline:none;resize:vertical;min-height:70px;line-height:1.4;transition:border-color 0.15s}
+.note-input:focus{border-color:#facc15}
+.note-input::placeholder{color:var(--text-muted)}
+.note-label-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.note-label{display:flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em}
+.note-label .star-ico{color:#facc15;font-size:0.8rem}
 
 .import-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;width:500px;max-width:92vw;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.5);animation:fadeUp 0.25s ease both}
 .drop-zone{border:2px dashed var(--border);border-radius:12px;padding:44px 20px;cursor:pointer;transition:all 0.2s;margin-bottom:14px;user-select:none}
@@ -217,6 +228,8 @@ tr.row-hidden{display:none}
       <div class="key-item"><div class="key-swatch" style="background:#facc15"></div> 2nd</div>
       <div class="key-item"><div class="key-swatch" style="background:#f59e0b"></div> Final</div>
       <div class="key-item"><div class="key-swatch" style="background:#ef4444"></div> Terminated</div>
+      <div class="key-sep"></div>
+      <div class="key-item"><span style="color:#facc15;font-size:0.85rem">★</span> Has note</div>
     </div>
   </div>
 
@@ -285,6 +298,16 @@ tr.row-hidden{display:none}
       <button class="btn" style="color:#ef4444;border-color:rgba(239,68,68,0.4)" onclick="fillEdit('Terminated')">Terminated</button>
       <button class="btn" style="color:#a78bfa;border-color:rgba(167,139,250,0.4)" onclick="fillEdit('Completed')">Completed</button>
     </div>
+
+    <!-- NOTE SECTION -->
+    <div style="margin-top:16px">
+      <div class="note-label-row">
+        <div class="note-label"><span class="star-ico">★</span> Note</div>
+        <button class="btn" id="clearNoteBtn" onclick="clearUserNote()" style="font-size:0.68rem;padding:3px 8px">Clear note</button>
+      </div>
+      <textarea id="userNoteInput" class="note-input" placeholder="Add a note about this day (optional) — adding a note will star this cell"></textarea>
+    </div>
+
     <div class="modal-actions" style="justify-content:space-between">
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="toggleHidePerson()" id="hidePersonBtn" style="font-size:0.72rem">Hide Budtender</button>
@@ -467,7 +490,6 @@ function toggleMonthFilterDropdown(e) {
 }
 
 function buildMonthFilterMenu() {
-  // Collect all unique YYYY-MM keys from allDates, sort newest first
   const monthSet = new Set();
   allDates.forEach(d => monthSet.add(d.substring(0, 7)));
   const months = Array.from(monthSet).sort().reverse();
@@ -498,7 +520,6 @@ function setMonthFilter(mk) {
   renderTable();
 }
 
-// Close dropdowns on outside click
 document.addEventListener('click', e => {
   if (!e.target.closest('.dropdown') && !e.target.closest('.header-dropdown') && !e.target.closest('#ptsColMenu')) {
     document.getElementById('viewModeMenu').classList.remove('active');
@@ -757,16 +778,13 @@ function getAnnualPts(dates) {
   return pts;
 }
 
-// Parse various date string formats into a Date object (returns null if unparseable)
 function parseDate(dateStr) {
   if (!dateStr) return null;
   const s = dateStr.toString().trim();
-  // ISO format YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
     const d = new Date(s.substring(0, 10) + 'T00:00:00');
     return isNaN(d) ? null : d;
   }
-  // Slash format M/D/YYYY or MM/DD/YYYY
   const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (slash) {
     let [, m, d, y] = slash;
@@ -774,15 +792,12 @@ function parseDate(dateStr) {
     const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
     return isNaN(dt) ? null : dt;
   }
-  // Fallback: try native parser
   const d = new Date(s);
   return isNaN(d) ? null : d;
 }
 
-// Sum points from last 60 days relative to most recent date in ALL data
 function getLast60Pts(dates) {
   if (!allDates.length) return 0;
-  // Find the truly most recent date by parsing each one, not by string sort
   let mostRecent = null;
   allDates.forEach(d => {
     const dt = parseDate(d);
@@ -794,23 +809,11 @@ function getLast60Pts(dates) {
   cutoff.setDate(cutoff.getDate() - 60);
 
   let pts = 0;
-  const included = [], excluded = [];
   Object.entries(dates).forEach(([d, v]) => {
     const entryDate = parseDate(d);
-    if (!entryDate) { excluded.push([d, v, 'UNPARSEABLE']); return; }
-    if (entryDate >= cutoff) {
-      pts += getPoints(v);
-      if (getPoints(v) > 0) included.push([d, v]);
-    } else {
-      if (getPoints(v) > 0) excluded.push([d, v, 'before cutoff ' + cutoff.toISOString().substring(0,10)]);
-    }
+    if (!entryDate) return;
+    if (entryDate >= cutoff) pts += getPoints(v);
   });
-  // Debug: log once per person (only if they have data)
-  if (window._debug60 && Object.keys(dates).length > 0) {
-    console.log('60-day calc | cutoff:', cutoff.toISOString().substring(0,10),
-                '| mostRecent:', mostRecent.toISOString().substring(0,10),
-                '| included:', included, '| excluded:', excluded, '| total pts:', pts);
-  }
   return pts;
 }
 
@@ -829,19 +832,15 @@ function getLatestWriteup(dates) {
   return latest;
 }
 
-// Name color based on points (not occurrence count):
-//   0-1 pts = green, 1.5-2.5 pts = orange, 3+ pts = red
-// If budtender has a write-up, use write-up pts; otherwise use last 60 days pts
 function getNameColor(dates, terminated) {
   if (terminated) return 'name-terminated';
   const hasWriteup = getLatestWriteup(dates) !== null;
   const pts = hasWriteup ? getWriteupPts(dates) : getLast60Pts(dates);
   if (pts >= 3) return 'name-red';
   if (pts >= 1.5) return 'name-orange';
-  return 'name-green'; // 0 - 1 pts
+  return 'name-green';
 }
 
-// Get write-up tag HTML for name display
 function getWriteupTagHtml(dates) {
   const wu = getLatestWriteup(dates);
   if (!wu) return '';
@@ -911,7 +910,6 @@ function fmtDate(d) {
 // WEEK / MONTH GROUPING
 // ═══════════════════════════════════════
 function getWeekKey(dateStr) {
-  // Returns ISO week start date (Monday) as YYYY-MM-DD
   const d = new Date(dateStr + 'T00:00:00');
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
@@ -920,7 +918,7 @@ function getWeekKey(dateStr) {
 }
 
 function getMonthKey(dateStr) {
-  return dateStr.substring(0, 7); // YYYY-MM
+  return dateStr.substring(0, 7);
 }
 
 function fmtWeek(weekKey) {
@@ -968,21 +966,16 @@ function renderTable() {
   const periodInfo = buildPeriods();
   const ptsLabel = ptsMode === '60days' ? 'Last 60 Days' : 'Annual Pts';
 
-  // Filter dates/periods by selected month
   const filteredDates = monthFilter === 'all' ? allDates : allDates.filter(d => d.substring(0, 7) === monthFilter);
   let filteredPeriods = null;
   if (periodInfo) {
     if (monthFilter === 'all') {
       filteredPeriods = periodInfo.periods;
     } else {
-      // For week view, include any week that has a day in the selected month
-      // For month view, only include the selected month itself
       if (viewMode === 'month') {
         filteredPeriods = periodInfo.periods.filter(p => p === monthFilter);
       } else {
-        // Week view: filter weeks that overlap with the selected month
         filteredPeriods = periodInfo.periods.filter(p => {
-          // A week starts at p (YYYY-MM-DD Monday) and spans 7 days
           const start = new Date(p + 'T00:00:00');
           for (let i = 0; i < 7; i++) {
             const day = new Date(start);
@@ -995,7 +988,6 @@ function renderTable() {
     }
   }
 
-  // Build header
   let headerCols;
   if (periodInfo) {
     headerCols = filteredPeriods.map(p => `<th class="period-col">${periodInfo.fmtFn(p)}</th>`).join('');
@@ -1028,6 +1020,7 @@ function renderTable() {
       }
     }
     const dates = person.dates || {};
+    const userNotes = person.userNotes || {};
     const mainPts = ptsMode === '60days' ? getLast60Pts(dates) : getAnnualPts(dates);
     const wp = getWriteupPts(dates);
     if (!showHidden && person.hidden) return '';
@@ -1036,7 +1029,6 @@ function renderTable() {
     const nc = getNameColor(dates, termed);
     const wuTag = getWriteupTagHtml(dates);
 
-    // Build date/period cells
     let cells;
     if (periodInfo) {
       cells = filteredPeriods.map(p => {
@@ -1048,7 +1040,10 @@ function renderTable() {
     } else {
       cells = filteredDates.map(d => {
         const v = dates[d] || '';
-        return `<td class="date-cell" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')">${cellHtml(v)}</td>`;
+        const hasUserNote = !!(userNotes[d] && userNotes[d].trim());
+        const starHtml = hasUserNote ? '<span class="note-star">★</span>' : '';
+        const titleAttr = hasUserNote ? ` title="${(userNotes[d]||'').replace(/"/g,'&quot;')}"` : '';
+        return `<td class="date-cell" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${starHtml}</td>`;
       }).join('');
     }
 
@@ -1081,6 +1076,8 @@ function openEdit(pk,dt) {
   const input = document.getElementById('editInput');
   const currentVal = (p && p.dates && p.dates[dt]) ? p.dates[dt] : '';
   input.value = currentVal;
+
+  // Auto-generated import note (from timeclock system)
   const noteEl = document.getElementById('editNote');
   const note = (p && p.notes && p.notes[dt]) ? p.notes[dt] : '';
   if (note) {
@@ -1089,6 +1086,12 @@ function openEdit(pk,dt) {
   } else {
     noteEl.style.display = 'none';
   }
+
+  // User-added note
+  const userNoteInput = document.getElementById('userNoteInput');
+  const userNote = (p && p.userNotes && p.userNotes[dt]) ? p.userNotes[dt] : '';
+  userNoteInput.value = userNote;
+
   document.getElementById('hidePersonBtn').textContent = (p && p.hidden) ? 'Unhide Budtender' : 'Hide Budtender';
   document.getElementById('editModal').classList.add('active');
   setTimeout(() => input.focus(), 100);
@@ -1098,13 +1101,28 @@ function fillEdit(val) {
   document.getElementById('editInput').value = val;
 }
 
+function clearUserNote() {
+  document.getElementById('userNoteInput').value = '';
+  document.getElementById('userNoteInput').focus();
+}
+
 function saveEdit() {
   if (!editingPerson || !editingDate) return;
   const val = document.getElementById('editInput').value.trim();
+  const userNote = document.getElementById('userNoteInput').value.trim();
+
   if (!attendanceData[editingPerson]) attendanceData[editingPerson] = { displayName: editingPerson, dates: {} };
   if (!attendanceData[editingPerson].dates) attendanceData[editingPerson].dates = {};
+  if (!attendanceData[editingPerson].userNotes) attendanceData[editingPerson].userNotes = {};
+
+  // Save value
   if (val) attendanceData[editingPerson].dates[editingDate] = val;
   else delete attendanceData[editingPerson].dates[editingDate];
+
+  // Save user note
+  if (userNote) attendanceData[editingPerson].userNotes[editingDate] = userNote;
+  else delete attendanceData[editingPerson].userNotes[editingDate];
+
   saveData(); rebuildDates(); renderTable(); closeEdit();
 }
 
