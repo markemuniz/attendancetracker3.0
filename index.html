@@ -3,7 +3,6 @@
 <html lang="en">
 <head>
   <link rel="icon" type="image/png" href="favicon.png">
-</head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Budtender Attendance Tracker</title>
@@ -680,13 +679,17 @@ function parseDate(dateStr) {
   const d=new Date(s); return isNaN(d)?null:d;
 }
 function getLast60Pts(dates) {
-  if (!allDates.length) return 0;
-  let mostRecent=null;
-  allDates.forEach(d => { const dt=parseDate(d); if (dt&&(!mostRecent||dt>mostRecent)) mostRecent=dt; });
-  if (!mostRecent) return 0;
-  const cutoff=new Date(mostRecent); cutoff.setDate(cutoff.getDate()-60);
-  let pts=0;
-  Object.entries(dates).forEach(([d,v]) => { const ed=parseDate(d); if (!ed) return; if (ed>=cutoff) pts+=getPoints(v); });
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - 60);
+  let pts = 0;
+  Object.entries(dates).forEach(([d,v]) => {
+    const ed = parseDate(d);
+    if (!ed) return;
+    ed.setHours(0,0,0,0);
+    if (ed >= cutoff && ed <= today) pts += getPoints(v);
+  });
   return pts;
 }
 function isTerminated(dates) { return Object.values(dates).some(v => /^(terminated|term)$/i.test((v||'').toString().trim())); }
