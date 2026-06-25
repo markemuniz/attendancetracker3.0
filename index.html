@@ -332,7 +332,6 @@ const dataRef = firebase.database().ref('attendance');
 const importLogRef = firebase.database().ref('importLog');
 
 let currentUserEmail = '';
-auth.onAuthStateChanged(u => { currentUserEmail = u ? u.email : ''; });
 
 function togglePassword() {
   const i = document.getElementById('passwordInput');
@@ -378,8 +377,11 @@ function showApp() {
   loadImportLog();
 }
 auth.onAuthStateChanged(user => {
-  if (user) { showApp(); }
-  else {
+  if (user) {
+    currentUserEmail = user.email || '';
+    showApp();
+  } else {
+    currentUserEmail = '';
     document.getElementById('loginView').style.display = 'flex';
     document.getElementById('appView').style.display = 'none';
     setTimeout(() => document.getElementById('emailInput').focus(), 100);
@@ -427,7 +429,8 @@ function renderImportLog(entries) {
 }
 
 function logImport(count) {
-  importLogRef.push({ ts: Date.now(), user: currentUserEmail || 'unknown', count }).catch(() => {});
+  const user = currentUserEmail || (auth.currentUser && auth.currentUser.email) || 'unknown';
+  importLogRef.push({ ts: Date.now(), user, count }).catch(err => console.warn('Log failed:', err));
 }
 // ───────────────────────────────────────────────────────────────
 
