@@ -423,8 +423,13 @@ function renderImportLog() {
       ${rangeHtml}
       <span class="log-sep">·</span>
       <span>${e.label}</span>
+      <button onclick="deleteImportLog(${i})" style="margin-left:6px;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.65rem;padding:0 2px;line-height:1" title="Remove this entry">✕</button>
     </div>`;
   }).join('');
+}
+function deleteImportLog(i) {
+  sessionImportLog.splice(i, 1);
+  renderImportLog();
 }
 // ───────────────────────────────────────────────────────────────
 
@@ -683,26 +688,38 @@ function showPreview(parsed) {
 }
 function confirmImport() {
   if (!pendingImport) return;
-  const count = Object.keys(pendingImport).length;
-  Object.entries(pendingImport).forEach(([k,v]) => {
+  const snapshot = pendingImport;
+  const count = Object.keys(snapshot).length;
+
+  // Extract date range from snapshot FIRST before anything clears it
+  const allImportDates = [];
+  Object.values(snapshot).forEach(p => {
+    if (p.dates) Object.keys(p.dates).forEach(d => allImportDates.push(d));
+  });
+  allImportDates.sort();
+  let dateRange = '';
+  if (allImportDates.length) {
+    const fmt = ds => { const d = new Date(ds + 'T00:00:00'); return (d.getMonth()+1) + '/' + d.getDate(); };
+    const first = fmt(allImportDates[0]);
+    const last = fmt(allImportDates[allImportDates.length - 1]);
+    dateRange = first === last ? first : first + ' - ' + last;
+  }
+
+  // Merge into attendanceData
+  Object.entries(snapshot).forEach(([k,v]) => {
     if (!attendanceData[k]) attendanceData[k] = { displayName: v.displayName, dates: {}, notes: {} };
     if (!attendanceData[k].dates) attendanceData[k].dates = {};
     if (!attendanceData[k].notes) attendanceData[k].notes = {};
     Object.assign(attendanceData[k].dates, v.dates);
     if (v.notes) Object.assign(attendanceData[k].notes, v.notes);
   });
-  // Extract date range BEFORE closeImport clears pendingImport
-  const allImportDates = [];
-  Object.values(pendingImport).forEach(p => { if (p.dates) Object.keys(p.dates).forEach(d => allImportDates.push(d)); });
-  allImportDates.sort();
-  let dateRange = '';
-  if (allImportDates.length) {
-    const fmt = ds => { const d = new Date(ds + 'T00:00:00'); return (d.getMonth()+1) + '/' + d.getDate(); };
-    dateRange = allImportDates.length === 1 ? fmt(allImportDates[0]) : fmt(allImportDates[0]) + ' - ' + fmt(allImportDates[allImportDates.length-1]);
-  }
-  saveData(); rebuildDates(); renderTable(); closeImport();
+
+  saveData();
+  rebuildDates();
+  renderTable();
+  closeImport();
   logImport(count, dateRange);
-  toast(`Imported ${count} budtenders`, 'success');
+  toast('Imported ' + count + ' budtenders', 'success');
 }
 function rebuildDates() {
   const s = new Set();
