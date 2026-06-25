@@ -156,7 +156,7 @@
   #importLog{flex-shrink:0;border-top:1px solid var(--border);background:var(--surface);padding:5px 24px;display:flex;align-items:center;gap:10px;overflow:hidden;min-height:26px}
   #importLog.log-empty{display:none}
   .import-log-label{font-size:0.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;flex-shrink:0}
-  #importLogEntries{display:flex;gap:8px;overflow-x:auto;flex:1;scrollbar-width:none;padding-bottom:1px}
+  #importLogEntries{display:flex;gap:6px;flex-wrap:wrap;flex:1}
   #importLogEntries::-webkit-scrollbar{display:none}
   .import-log-entry{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:0.65rem;color:var(--text-muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;flex-shrink:0}
   .import-log-entry .log-who{color:var(--accent);font-weight:600}
@@ -400,7 +400,7 @@ let initialLoad = true;
 
 // ── Import Log ──────────────────────────────────────────────────
 function loadImportLog() {
-  importLogRef.orderByChild('ts').limitToLast(50).on('value', snap => {
+  importLogRef.on('value', snap => {
     const entries = [];
     snap.forEach(child => entries.push(child.val()));
     renderImportLog(entries);
@@ -428,9 +428,9 @@ function renderImportLog(entries) {
   }).join('');
 }
 
-function logImport(count) {
+function logImport(count, filename) {
   const user = currentUserEmail || (auth.currentUser && auth.currentUser.email) || 'unknown';
-  importLogRef.push({ ts: Date.now(), user, count }).catch(err => console.warn('Log failed:', err));
+  importLogRef.push({ ts: Date.now(), user, count, filename: filename || '' }).catch(err => console.warn('Log failed:', err));
 }
 // ───────────────────────────────────────────────────────────────
 
@@ -540,7 +540,9 @@ dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classL
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]); });
 fileInput.addEventListener('change', e => { if (e.target.files.length) processFile(e.target.files[0]); fileInput.value = ''; });
+let pendingFileName = '';
 function processFile(file) {
+  pendingFileName = file.name.replace(/\.xlsx?|\.csv$/i, '');
   const reader = new FileReader();
   reader.onload = e => {
     try {
@@ -698,7 +700,7 @@ function confirmImport() {
     if (v.notes) Object.assign(attendanceData[k].notes, v.notes);
   });
   saveData(); rebuildDates(); renderTable(); closeImport();
-  logImport(count);
+  logImport(count, pendingFileName);
   toast(`Imported ${count} budtenders`, 'success');
 }
 function rebuildDates() {
