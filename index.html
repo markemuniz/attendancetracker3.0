@@ -153,10 +153,10 @@
   .toast.success{border-color:rgba(74,222,128,0.4)}
 
   /* Import log footer */
-  #importLog{flex-shrink:0;border-top:1px solid var(--border);background:var(--surface);padding:5px 24px;display:flex;align-items:center;gap:10px;overflow:hidden;min-height:26px}
+  #importLog{flex-shrink:0;border-top:1px solid var(--border);background:var(--surface);padding:6px 24px;display:flex;align-items:flex-start;gap:8px;max-height:120px;overflow-y:auto}
   #importLog.log-empty{display:none}
   .import-log-label{font-size:0.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;flex-shrink:0}
-  #importLogEntries{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+  #importLogEntries{display:flex;flex-direction:column;gap:4px;flex:1;padding:2px 0}
   #importLogEntries::-webkit-scrollbar{display:none}
   .import-log-entry{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:0.65rem;color:var(--text-muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;flex-shrink:0}
   .import-log-entry .log-who{color:var(--accent);font-weight:600}
@@ -329,7 +329,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const dataRef = firebase.database().ref('attendance');
-const importLogRef = firebase.database().ref('importLog');
 
 let currentUserEmail = '';
 
@@ -374,7 +373,6 @@ function showApp() {
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('appView').style.display = 'flex';
   loadData();
-  loadImportLog();
 }
 auth.onAuthStateChanged(user => {
   if (user) {
@@ -398,39 +396,35 @@ let ptsMode = 'annual';
 let monthFilter = 'all';
 let initialLoad = true;
 
-// ── Import Log ──────────────────────────────────────────────────
-function loadImportLog() {
-  importLogRef.on('value', snap => {
-    const entries = [];
-    snap.forEach(child => entries.push(child.val()));
-    renderImportLog(entries);
-  });
+// ── Import Log (session-based) ──────────────────────────────────
+const sessionImportLog = [];
+
+function logImport(count, dateRange) {
+  const now = new Date();
+  const mo = now.getMonth() + 1, dy = now.getDate(), yr = String(now.getFullYear()).slice(2);
+  const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const who = (currentUserEmail || (auth.currentUser && auth.currentUser.email) || 'unknown').split('@')[0];
+  sessionImportLog.unshift({ who, count, label: `${mo}/${dy}/${yr} ${timeStr}`, dateRange });
+  renderImportLog();
 }
 
-function renderImportLog(entries) {
+function renderImportLog() {
   const log = document.getElementById('importLog');
   const container = document.getElementById('importLogEntries');
-  if (!entries || !entries.length) { log.classList.add('log-empty'); return; }
+  if (!sessionImportLog.length) { log.classList.add('log-empty'); return; }
   log.classList.remove('log-empty');
-  const sorted = [...entries].sort((a, b) => b.ts - a.ts);
-  container.innerHTML = sorted.map(e => {
-    const d = new Date(e.ts);
-    const mo = d.getMonth() + 1, dy = d.getDate(), yr = String(d.getFullYear()).slice(2);
-    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    const who = e.user ? e.user.split('@')[0] : 'unknown';
-    return `<span class="import-log-entry">
-      <span class="log-who">${who}</span>
+  container.innerHTML = sessionImportLog.map((e, i) => {
+    const rangeHtml = e.dateRange ? `<span class="log-sep">·</span><span style="color:var(--text-dim)">${e.dateRange}</span>` : '';
+    return `<div class="import-log-entry">
+      <span style="color:var(--text-muted);min-width:16px">${sessionImportLog.length - i}.</span>
+      <span class="log-who">${e.who}</span>
       <span class="log-sep">·</span>
       <span>${e.count} budtenders</span>
+      ${rangeHtml}
       <span class="log-sep">·</span>
-      <span>${mo}/${dy}/${yr} ${timeStr}</span>
-    </span>`;
+      <span>${e.label}</span>
+    </div>`;
   }).join('');
-}
-
-function logImport(count, filename) {
-  const user = currentUserEmail || (auth.currentUser && auth.currentUser.email) || 'unknown';
-  importLogRef.push({ ts: Date.now(), user, count, filename: filename || '' }).catch(err => console.warn('Log failed:', err));
 }
 // ───────────────────────────────────────────────────────────────
 
@@ -540,9 +534,7 @@ dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classL
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]); });
 fileInput.addEventListener('change', e => { if (e.target.files.length) processFile(e.target.files[0]); fileInput.value = ''; });
-let pendingFileName = '';
 function processFile(file) {
-  pendingFileName = file.name.replace(/\.xlsx?|\.csv$/i, '');
   const reader = new FileReader();
   reader.onload = e => {
     try {
@@ -699,8 +691,17 @@ function confirmImport() {
     Object.assign(attendanceData[k].dates, v.dates);
     if (v.notes) Object.assign(attendanceData[k].notes, v.notes);
   });
+  // Extract date range BEFORE closeImport clears pendingImport
+  const allImportDates = [];
+  Object.values(pendingImport).forEach(p => { if (p.dates) Object.keys(p.dates).forEach(d => allImportDates.push(d)); });
+  allImportDates.sort();
+  let dateRange = '';
+  if (allImportDates.length) {
+    const fmt = ds => { const d = new Date(ds + 'T00:00:00'); return (d.getMonth()+1) + '/' + d.getDate(); };
+    dateRange = allImportDates.length === 1 ? fmt(allImportDates[0]) : fmt(allImportDates[0]) + ' - ' + fmt(allImportDates[allImportDates.length-1]);
+  }
   saveData(); rebuildDates(); renderTable(); closeImport();
-  logImport(count, pendingFileName);
+  logImport(count, dateRange);
   toast(`Imported ${count} budtenders`, 'success');
 }
 function rebuildDates() {
