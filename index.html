@@ -151,7 +151,6 @@
   .toast.show{opacity:1;transform:translateY(0)}
   .toast.error{border-color:rgba(255,107,122,0.4)}
   .toast.success{border-color:rgba(74,222,128,0.4)}
-
   /* Import log footer */
   #importLog{flex-shrink:0;border-top:1px solid var(--border);background:var(--surface);padding:6px 24px;display:flex;align-items:flex-start;gap:8px;max-height:120px;overflow-y:auto}
   #importLog.log-empty{display:none}
@@ -207,7 +206,7 @@
       <div class="key-item"><div class="key-swatch" style="background:#f59e0b"></div> Final</div>
       <div class="key-item"><div class="key-swatch" style="background:#ef4444"></div> Terminated</div>
       <div class="key-sep"></div>
-      <div class="key-item"><span style="color:#facc15;font-size:0.85rem">★</span> Has note</div>
+      <div class="key-item"><span style="color:#facc15;font-size:0.85rem">&#9733;</span> Has note</div>
     </div>
   </div>
   <div class="toolbar">
@@ -243,7 +242,7 @@
     </table>
   </div>
 
-  <!-- Import log footer - small, unobtrusive, newest first -->
+  <!-- Import log footer - persisted to Firebase -->
   <div id="importLog" class="log-empty">
     <span class="import-log-label">Imports</span>
     <div id="importLogEntries"></div>
@@ -280,7 +279,7 @@
     </div>
     <div style="margin-top:16px">
       <div class="note-label-row">
-        <div class="note-label"><span class="star-ico">★</span> Note</div>
+        <div class="note-label"><span class="star-ico">&#9733;</span> Note</div>
         <button class="btn" id="clearNoteBtn" onclick="clearUserNote()" style="font-size:0.68rem;padding:3px 8px">Clear note</button>
       </div>
       <textarea id="userNoteInput" class="note-input" placeholder="Add a note about this day (optional)"></textarea>
@@ -329,6 +328,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const dataRef = firebase.database().ref('attendance');
+const importLogRef = firebase.database().ref('importLog');
 
 let currentUserEmail = '';
 
@@ -373,6 +373,7 @@ function showApp() {
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('appView').style.display = 'flex';
   loadData();
+  loadImportLog();
 }
 auth.onAuthStateChanged(user => {
   if (user) {
@@ -396,39 +397,71 @@ let ptsMode = 'annual';
 let monthFilter = 'all';
 let initialLoad = true;
 
-// ── Import Log (session-based) ──────────────────────────────────
-const sessionImportLog = [];
+// ── Import Log (Firebase-persisted, survives hard refresh) ──────
+let importLogEntries = []; // sorted newest first
+
+function loadImportLog() {
+  importLogRef.once('value', snap => {
+    const data = snap.val();
+    if (!data) { importLogEntries = []; renderImportLog(); return; }
+    importLogEntries = Object.entries(data)
+      .map(([id, entry]) => ({ id, ...entry }))
+      .filter(e => e && e.ts && e.who && e.who !== 'undefined' && e.who !== 'unknown')
+      .sort((a, b) => b.ts - a.ts);
+    renderImportLog();
+  });
+}
 
 function logImport(count, dateRange) {
   const now = new Date();
   const mo = now.getMonth() + 1, dy = now.getDate(), yr = String(now.getFullYear()).slice(2);
   const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  const who = (currentUserEmail || (auth.currentUser && auth.currentUser.email) || 'unknown').split('@')[0];
-  sessionImportLog.unshift({ who, count, label: `${mo}/${dy}/${yr} ${timeStr}`, dateRange });
-  renderImportLog();
+  const who = (currentUserEmail || '').split('@')[0] || '';
+  if (!who) return;
+  const entry = {
+    who,
+    count: count || 0,
+    dateRange: dateRange || '',
+    label: `${mo}/${dy}/${yr} ${timeStr}`,
+    ts: Date.now()
+  };
+  // Push to Firebase, then do a single re-fetch to update the UI — no live listener to cause duplicates
+  importLogRef.push(entry)
+    .then(() => loadImportLog())
+    .catch(err => console.error('Import log save failed:', err));
 }
 
 function renderImportLog() {
   const log = document.getElementById('importLog');
   const container = document.getElementById('importLogEntries');
-  if (!sessionImportLog.length) { log.classList.add('log-empty'); return; }
+  if (!importLogEntries.length) { log.classList.add('log-empty'); return; }
   log.classList.remove('log-empty');
-  container.innerHTML = sessionImportLog.map((e, i) => {
-    const rangeHtml = e.dateRange ? `<span class="log-sep">·</span><span style="color:var(--text-dim)">${e.dateRange}</span>` : '';
+  container.innerHTML = importLogEntries.map((e, i) => {
+    const num = importLogEntries.length - i;
+    const who = e.who && e.who !== 'undefined' ? e.who : 'unknown';
+    const count = e.count || '?';
+    const label = e.label && e.label !== 'undefined' ? e.label : '';
+    const rangeHtml = (e.dateRange && e.dateRange !== 'undefined')
+      ? `<span class="log-sep">&#183;</span><span style="color:var(--text-dim)">${e.dateRange}</span>`
+      : '';
+    const delBtn = `<button onclick="deleteImportLog('${e.id}')" style="margin-left:6px;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.65rem;padding:0 2px;line-height:1" title="Remove this entry">&#x2715;</button>`;
     return `<div class="import-log-entry">
-      <span style="color:var(--text-muted);min-width:16px">${sessionImportLog.length - i}.</span>
-      <span class="log-who">${e.who}</span>
-      <span class="log-sep">·</span>
-      <span>${e.count} budtenders</span>
+      <span style="color:var(--text-muted);min-width:16px">${num}.</span>
+      <span class="log-who">${who}</span>
+      <span class="log-sep">&#183;</span>
+      <span>${count} budtenders</span>
       ${rangeHtml}
-      <span class="log-sep">·</span>
-      <span>${e.label}</span>
-      <button onclick="deleteImportLog(${i})" style="margin-left:6px;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.65rem;padding:0 2px;line-height:1" title="Remove this entry">✕</button>
+      ${label ? `<span class="log-sep">&#183;</span><span>${label}</span>` : ''}
+      ${delBtn}
     </div>`;
   }).join('');
 }
-function deleteImportLog(i) {
-  sessionImportLog.splice(i, 1);
+
+function deleteImportLog(id) {
+  if (!id) return;
+  importLogRef.child(id).remove().catch(err => console.error('Import log delete failed:', err));
+  // Optimistic local removal; Firebase listener will confirm
+  importLogEntries = importLogEntries.filter(e => e.id !== id);
   renderImportLog();
 }
 // ───────────────────────────────────────────────────────────────
@@ -691,7 +724,7 @@ function confirmImport() {
   const snapshot = pendingImport;
   const count = Object.keys(snapshot).length;
 
-  // Extract date range from snapshot FIRST before anything clears it
+  // Extract date range before anything clears pendingImport
   const allImportDates = [];
   Object.values(snapshot).forEach(p => {
     if (p.dates) Object.keys(p.dates).forEach(d => allImportDates.push(d));
@@ -888,9 +921,9 @@ function renderTable() {
     const termed=isTerminated(dates), nc=getNameColor(dates,termed), wuTag=getWriteupTagHtml(dates);
     let cells;
     if (periodInfo) {
-      cells=filteredPeriods.map(p=>{ const pts=getPeriodPoints(dates,p,periodInfo.keyFn); const display=pts===0?'<span style="color:var(--text-muted)">·</span>':(pts%1===0?pts:pts.toFixed(1)); return `<td class="period-cell ${pts>0?ptsColor(pts):''}">${display}</td>`; }).join('');
+      cells=filteredPeriods.map(p=>{ const pts=getPeriodPoints(dates,p,periodInfo.keyFn); const display=pts===0?'<span style="color:var(--text-muted)">&#183;</span>':(pts%1===0?pts:pts.toFixed(1)); return `<td class="period-cell ${pts>0?ptsColor(pts):''}">${display}</td>`; }).join('');
     } else {
-      cells=filteredDates.map(d=>{ const v=dates[d]||''; const hasUserNote=!!(userNotes[d]&&userNotes[d].trim()); const starHtml=hasUserNote?'<span class="note-star">★</span>':''; const titleAttr=hasUserNote?` title="${(userNotes[d]||'').replace(/"/g,'&quot;')}"`:'' ; return `<td class="date-cell" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${starHtml}</td>`; }).join('');
+      cells=filteredDates.map(d=>{ const v=dates[d]||''; const hasUserNote=!!(userNotes[d]&&userNotes[d].trim()); const starHtml=hasUserNote?'<span class="note-star">&#9733;</span>':''; const titleAttr=hasUserNote?` title="${(userNotes[d]||'').replace(/"/g,'&quot;')}"`:'' ; return `<td class="date-cell" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${starHtml}</td>`; }).join('');
     }
     return `<tr><td><span class="name-badge ${nc}">${fn}</span></td><td><span class="name-badge ${nc}">${ln}</span>${wuTag}</td><td class="${ptsColor(mainPts)}">${mainPts>0?mainPts%1===0?mainPts:mainPts.toFixed(1):'0'}</td><td class="${ptsColor(wp)}">${wp>0?wp%1===0?wp:wp.toFixed(1):'0'}</td>${cells}</tr>`;
   }).join('');
@@ -903,7 +936,7 @@ function openEdit(pk,dt) {
   editingPerson=pk; editingDate=dt;
   const p=attendanceData[pk], name=p?(p.displayName||pk):pk;
   document.getElementById('editTitle').textContent='Edit Entry';
-  document.getElementById('editSubtitle').textContent=name+' — '+fmtDateLong(dt);
+  document.getElementById('editSubtitle').textContent=name+' \u2014 '+fmtDateLong(dt);
   const input=document.getElementById('editInput');
   input.value=(p&&p.dates&&p.dates[dt])?p.dates[dt]:'';
   const noteEl=document.getElementById('editNote'), note=(p&&p.notes&&p.notes[dt])?p.notes[dt]:'';
