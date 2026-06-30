@@ -227,6 +227,7 @@
       <button class="btn" id="hideBtn" onclick="toggleShowHidden()">Show Hidden</button>
       <button class="btn" onclick="openImport()">&#8593; Import</button>
       <button class="btn" onclick="exportCSV()">&#8595; Export</button>
+      <button class="btn" id="undoBtn" onclick="undoLast()" disabled style="opacity:0.5;cursor:not-allowed">&#8634; Undo</button>
       <button class="btn danger" onclick="confirmClear()">Clear</button>
       <button class="btn" onclick="handleLock()">&#128274; Lock</button>
     </div>
@@ -396,6 +397,8 @@ let viewMode = 'normal';
 let ptsMode = 'annual';
 let monthFilter = 'all';
 let initialLoad = true;
+let undoStack = [];
+const MAX_UNDO = 20;
 
 // ── Import Log (Firebase-persisted, survives hard refresh) ──────
 let importLogEntries = []; // sorted newest first
@@ -488,6 +491,30 @@ function loadData() {
 function saveData() {
   dataRef.set(attendanceData).catch(err => toast('Save failed: ' + err.message, 'error'));
   localStorage.setItem('bt_attendance', JSON.stringify(attendanceData));
+}
+function pushUndo() {
+  try {
+    undoStack.push(JSON.parse(JSON.stringify(attendanceData)));
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+    updateUndoBtn();
+  } catch(e) { console.error('Undo snapshot failed:', e); }
+}
+function updateUndoBtn() {
+  const btn = document.getElementById('undoBtn');
+  if (!btn) return;
+  btn.disabled = undoStack.length === 0;
+  btn.style.opacity = undoStack.length === 0 ? '0.5' : '1';
+  btn.style.cursor = undoStack.length === 0 ? 'not-allowed' : 'pointer';
+  btn.title = undoStack.length ? `Undo last change (${undoStack.length} step${undoStack.length>1?'s':''} available)` : 'Nothing to undo';
+}
+function undoLast() {
+  if (!undoStack.length) { toast('Nothing to undo', 'error'); return; }
+  attendanceData = undoStack.pop();
+  saveData();
+  rebuildDates();
+  renderTable();
+  updateUndoBtn();
+  toast('Undo successful', 'success');
 }
 function toggleViewDropdown(e) {
   e.stopPropagation();
@@ -738,6 +765,7 @@ function confirmImport() {
     dateRange = first === last ? first : first + ' - ' + last;
   }
 
+  pushUndo();
   // Merge into attendanceData
   Object.entries(snapshot).forEach(([k,v]) => {
     if (!attendanceData[k]) attendanceData[k] = { displayName: v.displayName, dates: {}, notes: {} };
@@ -832,8 +860,8 @@ function toggleHidePerson() {
   if (!editingPerson) return;
   const p=attendanceData[editingPerson]; if (!p) return;
   const name=p.displayName||editingPerson;
-  if (p.hidden) { p.hidden=false; toast(name+' is now visible','success'); }
-  else { if (!confirm('Hide '+name+' from the tracker?')) return; p.hidden=true; toast(name+' hidden','success'); }
+  if (p.hidden) { pushUndo(); p.hidden=false; toast(name+' is now visible','success'); }
+  else { if (!confirm('Hide '+name+' from the tracker?')) return; pushUndo(); p.hidden=true; toast(name+' hidden','success'); }
   saveData(); renderTable(); closeEdit();
 }
 function ptsColor(pts) {
@@ -952,6 +980,7 @@ function saveEdit() {
   if (!editingPerson||!editingDate) return;
   const val=document.getElementById('editInput').value.trim();
   const userNote=document.getElementById('userNoteInput').value.trim();
+  pushUndo();
   if (!attendanceData[editingPerson]) attendanceData[editingPerson]={displayName:editingPerson,dates:{}};
   if (!attendanceData[editingPerson].dates) attendanceData[editingPerson].dates={};
   if (!attendanceData[editingPerson].userNotes) attendanceData[editingPerson].userNotes={};
@@ -964,6 +993,7 @@ function deletePerson() {
   if (!editingPerson) return;
   const p=attendanceData[editingPerson], name=p?(p.displayName||editingPerson):editingPerson;
   if (!confirm('Delete '+name+' and all their attendance data?')) return;
+  pushUndo();
   delete attendanceData[editingPerson];
   saveData(); rebuildDates(); renderTable(); closeEdit();
   toast(name+' deleted','success');
@@ -986,6 +1016,7 @@ function exportCSV() {
 function confirmClear() {
   if (!confirm('Clear ALL attendance data? Cannot be undone.')) return;
   if (!confirm('Are you sure?')) return;
+  pushUndo();
   attendanceData={}; saveData(); rebuildDates(); renderTable(); toast('All data cleared','success');
 }
 function toast(msg,type) {
