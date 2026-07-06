@@ -785,7 +785,17 @@ function confirmImport() {
 function rebuildDates() {
   const s = new Set();
   Object.values(attendanceData).forEach(p => { if (p.dates) Object.keys(p.dates).forEach(d => s.add(d)); });
-  allDates = Array.from(s).sort();
+  const sorted = Array.from(s).sort();
+  if (!sorted.length) { allDates = []; return; }
+  // Fill every calendar day between the earliest and latest recorded date,
+  // so a day with zero occurrences still gets its own column.
+  const start = new Date(sorted[0] + 'T00:00:00');
+  const end = new Date(sorted[sorted.length - 1] + 'T00:00:00');
+  const filled = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    filled.push(d.toISOString().split('T')[0]);
+  }
+  allDates = filled;
 }
 function getPoints(val) {
   if (!val) return 0;
