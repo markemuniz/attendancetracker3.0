@@ -212,7 +212,7 @@
       <div class="key-sep"></div>
       <div class="key-item"><span style="color:#facc15;font-size:0.85rem">&#9733;</span> Has note</div>
       <div class="key-sep"></div>
-      <div class="key-item"><span class="sick-badge" style="margin-right:0">18.5</span> NYC-S&amp;SL (NYC Sick and Safe Leave) hours remaining, 32/yr, before name</div>
+      <div class="key-item"><span class="sick-badge" style="margin-right:0">18.5</span> NYC-PS&amp;STO (Protected Safe &amp; Sick Time Off) hours remaining, 32/yr, before name</div>
     </div>
   </div>
   <div class="toolbar">
@@ -285,8 +285,8 @@
       <button class="btn" style="color:#a78bfa;border-color:rgba(167,139,250,0.4)" onclick="fillEdit('Completed')">Completed</button>
     </div>
     <div class="modal-btns" style="align-items:center">
-      <button class="btn" style="color:#38bdf8;border-color:rgba(56,189,248,0.4)" onclick="addSickTime(15)">+15 min NYC-S&amp;SL</button>
-      <button class="btn" style="color:#38bdf8;border-color:rgba(56,189,248,0.4)" onclick="addSickTime(60)">+1 hr NYC-S&amp;SL</button>
+      <button class="btn" style="color:#38bdf8;border-color:rgba(56,189,248,0.4)" onclick="addSickTime(15)">+15 min NYC-PS&amp;STO</button>
+      <button class="btn" style="color:#38bdf8;border-color:rgba(56,189,248,0.4)" onclick="addSickTime(60)">+1 hr NYC-PS&amp;STO</button>
       <span id="sickPreview" style="font-size:0.72rem;color:var(--text-muted)"></span>
     </div>
     <div style="margin-top:16px">
@@ -818,12 +818,12 @@ function getPoints(val) {
 // ── Unpaid Sick Time (NY state sick leave: 32 hrs/year) ──────────
 const SICK_ANNUAL_HOURS = 32;
 // Recognizes: legacy "Unpaid Sick Time" (=8h), legacy "Sick:180" (minutes-only),
-// and the current "NYC-S&SL: 3h 15m" format. Returns total minutes or null if not a sick entry.
+// and the current "NYC-PS&STO: 3h 15m" format. Returns total minutes or null if not a sick entry.
 function parseSickMinutes(val) {
   if (!val) return null;
   const v = val.toString().trim();
   if (/^unpaid sick time$/i.test(v)) return 480;
-  let m = v.match(/^NYC-S&SL:\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*$/i);
+  let m = v.match(/^NYC-PS&STO:\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*$/i);
   if (m && (m[1] || m[2])) return (parseInt(m[1] || 0, 10) * 60) + (parseInt(m[2] || 0, 10));
   m = v.match(/^Sick:(\d+)$/i); // legacy minutes-only format
   if (m) return parseInt(m[1], 10) || 0;
@@ -853,7 +853,7 @@ function formatMinutesLabel(mins) {
   if (h) return h + 'h';
   return m + 'm';
 }
-function formatSickLabel(mins) { return 'NYC-S&SL: ' + formatMinutesLabel(mins); }
+function formatSickLabel(mins) { return 'NYC-PS&STO: ' + formatMinutesLabel(mins); }
 function getWriteupPts(dates) {
   const writeupTypes = ['1st','2nd','final','terminated','term','completed'];
   let lastWriteupDate = null;
@@ -941,7 +941,7 @@ function cellHtml(val) {
   if (v==='2nd') return '<span class="val-2nd">2nd</span>';
   if (/^final$/i.test(v)) return '<span class="val-final">Final</span>';
   if (/^term/i.test(v)) return '<span class="val-term">TERM</span>';
-  if (/^unpaid sick time$/i.test(v)) return '<span class="val-sick">NYC-S&SL: 8h</span>';
+  if (/^unpaid sick time$/i.test(v)) return '<span class="val-sick">NYC-PS&STO: 8h</span>';
   const sickMins=parseSickMinutes(v);
   if (sickMins!==null) return '<span class="val-sick">'+formatSickLabel(sickMins)+'</span>';
   return '<span style="color:var(--text-dim)">'+v+'</span>';
