@@ -231,6 +231,7 @@
         <div class="dropdown-menu" id="monthFilterMenu"></div>
       </div>
       <button class="btn" id="hideBtn" onclick="toggleShowHidden()">Show Hidden</button>
+      <button class="btn" onclick="openAddDate()">+ Add Date</button>
       <button class="btn" onclick="openImport()">&#8593; Import</button>
       <button class="btn" onclick="exportCSV()">&#8595; Export</button>
       <button class="btn" id="undoBtn" onclick="undoLast()" disabled style="opacity:0.5;cursor:not-allowed">&#8634; Undo</button>
@@ -325,6 +326,21 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="addDateModal">
+  <div class="modal" style="width:360px">
+    <h3 style="font-style:italic">Add Date Column</h3>
+    <p class="subtitle">Add a day to the tracker without importing a report</p>
+    <div style="margin-bottom:14px">
+      <label style="display:block;font-size:0.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">Date</label>
+      <input type="date" id="addDateInput" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:0.85rem;outline:none;color-scheme:dark">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeAddDate()">Cancel</button>
+      <button class="btn primary" onclick="confirmAddDate()">Add Date</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -341,6 +357,7 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const dataRef = firebase.database().ref('attendance');
 const importLogRef = firebase.database().ref('importLog');
+const manualDatesRef = firebase.database().ref('manualDates');
 
 let currentUserEmail = '';
 
@@ -386,6 +403,7 @@ function showApp() {
   document.getElementById('appView').style.display = 'flex';
   loadData();
   loadImportLog();
+  loadManualDates();
 }
 auth.onAuthStateChanged(user => {
   if (user) {
@@ -401,6 +419,7 @@ auth.onAuthStateChanged(user => {
 
 let attendanceData = {};
 let allDates = [];
+let manualDates = [];
 let editingPerson = null;
 let editingDate = null;
 let pendingImport = null;
@@ -477,6 +496,35 @@ function deleteImportLog(id) {
   // Optimistic local removal; Firebase listener will confirm
   importLogEntries = importLogEntries.filter(e => e.id !== id);
   renderImportLog();
+}
+// ───────────────────────────────────────────────────────────────
+
+// ── Manual dates (Firebase-persisted): add a day column without importing ──
+function loadManualDates() {
+  manualDatesRef.on('value', snap => {
+    const v = snap.val() || {};
+    manualDates = Object.keys(v);
+    rebuildDates();
+    renderTable();
+  }, err => console.warn('Manual dates load failed:', err.message));
+}
+function openAddDate() {
+  const input = document.getElementById('addDateInput');
+  input.value = new Date().toISOString().split('T')[0];
+  document.getElementById('addDateModal').classList.add('active');
+  setTimeout(() => input.focus(), 100);
+}
+function closeAddDate() { document.getElementById('addDateModal').classList.remove('active'); }
+function confirmAddDate() {
+  const ds = document.getElementById('addDateInput').value;
+  if (!ds) { toast('Pick a date first', 'error'); return; }
+  if (!manualDates.includes(ds)) manualDates.push(ds);
+  manualDatesRef.child(ds).set(true).catch(err => toast('Save failed: ' + err.message, 'error'));
+  rebuildDates();
+  renderTable();
+  closeAddDate();
+  toast('Added ' + fmtDate(ds), 'success');
+  setTimeout(() => { const wrap = document.getElementById('tableWrap'); wrap.scrollLeft = wrap.scrollWidth; }, 60);
 }
 // ───────────────────────────────────────────────────────────────
 
@@ -859,6 +907,7 @@ function confirmImport() {
 function rebuildDates() {
   const s = new Set();
   Object.values(attendanceData).forEach(p => { if (p.dates) Object.keys(p.dates).forEach(d => s.add(d)); });
+  manualDates.forEach(d => s.add(d));
   const sorted = Array.from(s).sort();
   if (!sorted.length) { allDates = []; return; }
   // Fill every calendar day between the earliest and latest recorded date,
