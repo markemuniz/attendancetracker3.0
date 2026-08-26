@@ -259,7 +259,7 @@
 
 <div class="dropdown-menu" id="ptsColMenu" style="position:fixed;z-index:100">
   <div class="dropdown-item selected" data-mode="annual" onclick="setPtsMode('annual')">Annual Pts</div>
-  <div class="dropdown-item" data-mode="60days" onclick="setPtsMode('60days')">Last 60 Days</div>
+  <div class="dropdown-item" data-mode="90days" onclick="setPtsMode('90days')">Last 90 Days</div>
 </div>
 
 <div class="modal-overlay" id="editModal">
@@ -601,6 +601,9 @@ function togglePtsDropdown(e) {
   const rect = e.currentTarget.getBoundingClientRect();
   menu.style.top = (rect.bottom + 4) + 'px';
   menu.style.left = rect.left + 'px';
+  menu.style.right = 'auto';
+  menu.style.minWidth = '0';
+  menu.style.width = 'max-content';
   menu.classList.toggle('active');
   document.getElementById('viewModeMenu').classList.remove('active');
   document.getElementById('monthFilterMenu').classList.remove('active');
@@ -1003,9 +1006,9 @@ function parseDate(dateStr) {
   if (slash) { let [,m,d,y]=slash; y=y.length===2?'20'+y:y; const dt=new Date(parseInt(y),parseInt(m)-1,parseInt(d)); return isNaN(dt)?null:dt; }
   const d=new Date(s); return isNaN(d)?null:d;
 }
-function getLast60Pts(dates) {
+function getLast90Pts(dates) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - 60);
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - 90);
   let pts = 0;
   Object.entries(dates).forEach(([d,v]) => {
     const ed = parseDate(d); if (!ed) return; ed.setHours(0,0,0,0);
@@ -1023,7 +1026,7 @@ function getLatestWriteup(dates) {
 function getNameColor(dates, terminated) {
   if (terminated) return 'name-terminated';
   const hasWriteup=getLatestWriteup(dates)!==null;
-  const pts=hasWriteup?getWriteupPts(dates):getLast60Pts(dates);
+  const pts=hasWriteup?getWriteupPts(dates):getLast90Pts(dates);
   if (pts>=3) return 'name-red';
   if (pts>=1.5) return 'name-orange';
   return 'name-green';
@@ -1112,7 +1115,7 @@ function renderTable() {
   document.getElementById('emptyState').style.display='none';
   document.getElementById('mainTable').style.display='';
   const periodInfo=buildPeriods();
-  const ptsLabel=ptsMode==='60days'?'Last 60 Days':'Annual Pts';
+  const ptsLabel=ptsMode==='90days'?'Last 90 Days':'Annual Pts';
   const filteredDates=monthFilter==='all'?allDates:allDates.filter(d=>d.substring(0,7)===monthFilter);
   let filteredPeriods=null;
   if (periodInfo) {
@@ -1136,7 +1139,7 @@ function renderTable() {
     if (name.includes(',')) { const parts=name.split(',').map(s=>s.trim()); ln=parts[0]; fn=parts[1]||''; }
     else { const parts=name.split(' ').map(s=>s.trim()).filter(Boolean); if (parts.length>=2) { fn=parts[0]; ln=parts.slice(1).join(' '); } else { fn=parts[0]||name; ln=''; } }
     const dates=person.dates||{}, userNotes=person.userNotes||{};
-    const mainPts=ptsMode==='60days'?getLast60Pts(dates):getAnnualPts(dates);
+    const mainPts=ptsMode==='90days'?getLast90Pts(dates):getAnnualPts(dates);
     const wp=getWriteupPts(dates);
     if (!showHidden&&person.hidden) return '';
     const termed=isTerminated(dates), nc=getNameColor(dates,termed), wuTag=getWriteupTagHtml(dates);
@@ -1223,13 +1226,13 @@ function deletePerson() {
 function exportCSV() {
   if (!Object.keys(attendanceData).length) { toast('No data','error'); return; }
   rebuildDates();
-  let csv='First Name,Last Name,Annual Pts,Last 60 Days,Write-Up Pts,Sick Hrs Remaining,'+allDates.map(d=>fmtDate(d)).join(',')+'\n';
+  let csv='First Name,Last Name,Annual Pts,Last 90 Days,Write-Up Pts,Sick Hrs Remaining,'+allDates.map(d=>fmtDate(d)).join(',')+'\n';
   Object.entries(attendanceData).sort((a,b)=>(a[1].displayName||a[0]).localeCompare(b[1].displayName||b[0])).forEach(([k,p])=>{
     const name=p.displayName||k; let fn='',ln='';
     if (name.includes(',')) { const pts=name.split(',').map(s=>s.trim()); ln=pts[0]; fn=pts[1]||''; }
     else { const pts=name.split(' ').filter(Boolean); fn=pts[0]||''; ln=pts.slice(1).join(' '); }
-    const dates=p.dates||{}, ap=getAnnualPts(dates), l60=getLast60Pts(dates), wp=getWriteupPts(dates), sr=getSickHoursRemaining(dates);
-    csv+=`"${fn}","${ln}",${ap},${l60},${wp},${sr},${allDates.map(d=>dates[d]||'').join(',')}\n`;
+    const dates=p.dates||{}, ap=getAnnualPts(dates), l90=getLast90Pts(dates), wp=getWriteupPts(dates), sr=getSickHoursRemaining(dates);
+    csv+=`"${fn}","${ln}",${ap},${l90},${wp},${sr},${allDates.map(d=>dates[d]||'').join(',')}\n`;
   });
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download=`attendance_${new Date().toISOString().split('T')[0]}.csv`; a.click();
