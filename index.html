@@ -1367,6 +1367,22 @@ function confirmEmployeeImport() {
   renderTable();
   toast('Saved ' + Object.keys(map).length + ' employee IDs', 'success');
 }
+// Older versions imported the ID file as attendance, leaving each ID in the person's row
+// under an "Employee ID" pseudo-date. Read the ID from there when the employee list has none.
+function caRowId(p) {
+  const k = Object.keys((p && p.dates) || {}).find(k => /^employee.?(id|number|no)$/i.test(k.trim()));
+  return k ? String(p.dates[k] == null ? '' : p.dates[k]).trim() : '';
+}
+function findRowEmployeeId(fn, ln) {
+  const want = empKey(fn, ln);
+  for (const p of Object.values(attendanceData)) {
+    const nm = splitName(p.displayName || '');
+    if (empKey(nm.fn, nm.ln) !== want) continue;
+    const id = caRowId(p);
+    if (id) return id;
+  }
+  return '';
+}
 function findEmployeeId(fn, ln) {
   const exact = employees[empKey(fn, ln)];
   if (exact) return exact.id || '';
@@ -1476,6 +1492,17 @@ function cleanupIdImport() {
   const plan = caJunkPlan();
   const names = plan.remove.map(k => attendanceData[k].displayName || k);
   if (!confirm('Remove duplicate leftover rows?\n\nRows to delete (' + names.length + '):\n' + (names.join(', ') || 'none') + '\n\nThese have no dates or notes, and the same person has another row. The stray "Employee ID" column will also be removed from ' + plan.strip.length + ' other row(s). No real dates or points are changed.')) return;
+  // keep the IDs: copy them into the employee list before the stray column is removed
+  let saved = 0;
+  Object.values(attendanceData).forEach(p => {
+    const id = caRowId(p); if (!id) return;
+    const nm = splitName(p.displayName || ''), key = empKey(nm.fn, nm.ln);
+    if (nm.fn && nm.ln && !(employees[key] && employees[key].id)) { employees[key] = { first: nm.fn, last: nm.ln, id }; saved++; }
+  });
+  if (saved) {
+    try { localStorage.setItem('bt_employees', JSON.stringify(employees)); } catch(e) {}
+    employeesRef.set(employees).catch(err => toast('Employee list save failed: ' + err.message, 'error'));
+  }
   pushUndo();
   Object.values(attendanceData).forEach(p => { if (p.dates) delete p.dates[JUNK_DATE_KEY]; });
   plan.remove.forEach(k => delete attendanceData[k]);
@@ -1647,7 +1674,7 @@ function openCA(key) {
   document.getElementById('caSubtitle').textContent = nm.fn + ' ' + nm.ln + ' — ' + fmtPts(total) + ' points';
   document.getElementById('caStage').value = caNextStage(dates);
   document.getElementById('caDate').value = todayYMD();
-  const id = findEmployeeId(nm.fn, nm.ln);
+  const id = findEmployeeId(nm.fn, nm.ln) || caRowId(p) || findRowEmployeeId(nm.fn, nm.ln);
   document.getElementById('caEmpId').value = id;
   document.getElementById('caEmpId').placeholder = Object.keys(employees).length ? 'Not found in employee list' : 'Import employee ID list first';
   document.getElementById('caTitle').value = CA_CONFIG.title;
