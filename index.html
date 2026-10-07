@@ -1308,6 +1308,7 @@ let employees = {};       // { "first_last": { first, last, id } } — lives in 
 let pendingEmployees = null;
 let caPerson = null;      // attendanceData key of the person in the modal
 let caOccurrences = [];
+let caPriorCycles = [];
 
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function splitName(name) {
@@ -1401,6 +1402,21 @@ function caGetOccurrences(person) {
   });
   return out;
 }
+// Earlier warnings in the person's current discipline chain, oldest first, each with the
+// occurrences that led to it: [{ marker:'1st', date:'2026-07-22', occurrences:[...] }].
+// A Completed/Terminated entry restarts the chain.
+function caGetPriorCycles(person) {
+  const dates = person.dates || {}, notes = person.notes || {};
+  const stages = { '1st': '1st', '2nd': '2nd', 'final': 'Final' };
+  let chain = [], bucket = [];
+  Object.entries(dates).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([d,v]) => {
+    const val = (v||'').toString().trim().toLowerCase();
+    if (stages[val]) { chain.push({ marker: stages[val], date: d, occurrences: bucket }); bucket = []; }
+    else if (['completed','terminated','term'].includes(val)) { chain = []; bucket = []; }
+    else { const pts = getPoints(v); if (pts) bucket.push({ date: d, pts, label: caOccurrenceLabel(pts, notes[d] || '') }); }
+  });
+  return chain;
+}
 function caOccurrenceLabel(pts, note) {
   if (pts >= 1) return /no.?call|ncns/i.test(note) ? 'No Call/No Show' : 'Call Out';
   let mins = null;
@@ -1492,7 +1508,8 @@ function caFormData() {
     title: document.getElementById('caTitle').value.trim(),
     supervisor: document.getElementById('caSupervisor').value.trim(),
     location: document.getElementById('caLocation').value.trim(),
-    occurrences: caOccurrences
+    occurrences: caOccurrences,
+    prior: document.getElementById('caStage').value === 'first' ? [] : caPriorCycles
   };
 }
 function caExpectation(stage) {
@@ -1512,7 +1529,25 @@ function caFormHtml(d) {
   const hd = t => `<tr>${td(20, t, 'background:#d9d9d9;font-size:8pt;font-weight:bold;text-transform:uppercase')}</tr>`;
   const chk = (on, t) => `<div style="margin:1px 0">${box(on)} ${t}</div>`;
   const stageRow = Object.entries(CA_STAGES).map(([k, s]) => td(5, `${box(d.stage === k)} ${s.label}`)).join('');
-  const list = d.occurrences.map(o => `<li>${fmtUS(o.date)} &ndash; ${escHtml(o.label)} &ndash; ${fmtPts(o.pts)}</li>`).join('');
+  const ul = occ => `<ul style="margin:2px 0 2px 18px;padding:0">${occ.map(o => `<li>${fmtUS(o.date)} &ndash; ${escHtml(o.label)} &ndash; ${fmtPts(o.pts)}</li>`).join('')}</ul>`;
+  const list = ul(d.occurrences);
+  const sumPts = occ => occ.reduce((a, o) => a + o.pts, 0);
+  // Later warnings put each earlier warning's occurrences in its own column, current ones in the last.
+  const cols = d.prior.length ? [
+    ...d.prior.map(c => ({ head: `${c.marker} Delivered on ${fmtUS(c.date)}`, occ: c.occurrences })),
+    { head: 'For ' + CA_STAGES[d.stage].marker + ':', occ: d.occurrences }
+  ] : null;
+  let details;
+  if (cols) {
+    const base = Math.floor(20 / cols.length), extra = 20 - base * cols.length;
+    const cells = cols.map((c, i) => {
+      const bd = 'border:none;border-bottom:1px solid #000;' + (i === 0 ? 'border-left:1px solid #000;' : '') + (i === cols.length - 1 ? 'border-right:1px solid #000;' : '');
+      return td(base + (i === 0 ? extra : 0), `<p style="margin:0"><b>${escHtml(c.head)}</b></p>${ul(c.occ)}<p style="margin:0"><b>Total Occurrences: ${fmtPts(sumPts(c.occ))}</b></p>`, bd);
+    }).join('');
+    details = `<tr>${td(20, `<p style="margin:0">${escHtml(d.first)} has failed to meet the Company&rsquo;s attendance, punctuality, and/or timekeeping expectations as outlined in policy. ${escHtml(d.first)} currently has ${fmtPts(total)} occurrences.</p><p style="margin:6px 0 0"><b>Documented Occurrence(s):</b></p>`, 'border-bottom:none;')}</tr>\n<tr>${cells}</tr>`;
+  } else {
+    details = `<tr>${td(20, `<p style="margin:0 0 6px">${escHtml(d.first)} has failed to meet the Company&rsquo;s attendance, punctuality, and/or timekeeping expectations as outlined in policy. ${escHtml(d.first)} currently has ${fmtPts(total)} occurrences.</p><p style="margin:0"><b>Documented Occurrence(s):</b></p>${list}<p style="margin:0"><b>Total Occurrence: ${fmtPts(total)}</b></p>`)}</tr>`;
+  }
   const noBorder = 'border:none;padding:2px 0;font-family:Arial,Helvetica,sans-serif;';
   return `<table width="700" style="width:700px;border-collapse:collapse;table-layout:fixed;font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#000">
 <colgroup>${'<col width="35" style="width:35px">'.repeat(20)}</colgroup>
@@ -1526,7 +1561,7 @@ ${hd('Corrective Action To Be Taken (check one)')}
 ${hd('Nature of Incident (check one)')}
 <tr>${td(10, '<div style="font-weight:bold">Unsatisfactory Performance</div>' + chk(false,'Not Meeting Job Role Expectations') + chk(true,'Attendance') + chk(hasLate,'Chronic Tardiness'))}${td(10, '<div style="font-weight:bold">Unsatisfactory Conduct</div>' + chk(false,'Negligent Conduct') + chk(false,'Inappropriate Conduct') + chk(false,'Insubordination') + chk(d.occurrences.some(o => /no call/i.test(o.label)),'No Call/No Show') + chk(true,'Violation of Policy'))}</tr>
 ${hd('Incident Details')}
-<tr>${td(20, `<p style="margin:0 0 6px">${escHtml(d.first)} has failed to meet the Company&rsquo;s attendance, punctuality, and/or timekeeping expectations as outlined in policy. ${escHtml(d.first)} currently has ${fmtPts(total)} occurrences.</p><p style="margin:0"><b>Documented Occurrence(s):</b></p><ul style="margin:2px 0 2px 22px;padding:0">${list}</ul><p style="margin:0"><b>Total Occurrence: ${fmtPts(total)}</b></p>`)}</tr>
+${details}
 ${hd('Future Expectation')}
 <tr>${td(20, escHtml(caExpectation(d.stage)))}</tr>
 <tr>${td(7, lbl('Supervisor&rsquo;s Signature'), 'height:40px')}${td(3, lbl('Date'))}${td(7, lbl('HR Signature'))}${td(3, lbl('Date'))}</tr>
@@ -1549,6 +1584,7 @@ function openCA(key) {
   const dates = p.dates || {}, nm = splitName(p.displayName || key);
   caPerson = key;
   caOccurrences = caGetOccurrences(p);
+  caPriorCycles = caGetPriorCycles(p);
   const total = caOccurrences.reduce((a, o) => a + o.pts, 0);
   document.getElementById('caSubtitle').textContent = nm.fn + ' ' + nm.ln + ' — ' + fmtPts(total) + ' points';
   document.getElementById('caStage').value = caNextStage(dates);
