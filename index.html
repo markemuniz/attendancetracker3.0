@@ -1417,31 +1417,49 @@ function todayYMD() { return toLocalYMD(new Date()); }
 
 // ── Cleanup for the employee-ID file being imported as attendance (old versions) ──
 // That import added an "Employee ID" pseudo-date to people and created extra
-// "Last, First" rows holding nothing else. Removes only those leftovers.
+// "Last, First" rows holding nothing else. Removes only those leftovers: rows that
+// have no dates/notes of their own AND whose person also has another row.
 const JUNK_DATE_KEY = 'Employee ID';
-function caJunkRows() {
-  return Object.keys(attendanceData).filter(k => {
-    const p = attendanceData[k], ks = Object.keys(p.dates || {});
-    return ks.length === 1 && ks[0] === JUNK_DATE_KEY && !(p.userNotes && Object.keys(p.userNotes).length);
-  });
+function caRowIsEmpty(p) {
+  const real = Object.keys(p.dates || {}).filter(k => k !== JUNK_DATE_KEY);
+  return !real.length && !(p.userNotes && Object.keys(p.userNotes).length);
 }
-function caJunkCount() { return Object.values(attendanceData).filter(p => p.dates && JUNK_DATE_KEY in p.dates).length; }
+function caJunkPlan() {
+  const groups = {};
+  Object.keys(attendanceData).forEach(k => {
+    const nm = splitName(attendanceData[k].displayName || k);
+    (groups[empKey(nm.fn, nm.ln)] = groups[empKey(nm.fn, nm.ln)] || []).push(k);
+  });
+  const remove = [];
+  Object.values(groups).forEach(keys => {
+    if (keys.length < 2) return;
+    const withData = keys.filter(k => !caRowIsEmpty(attendanceData[k]));
+    const empties = keys.filter(k => caRowIsEmpty(attendanceData[k]));
+    if (withData.length) remove.push(...empties);        // keep every row that has data
+    else remove.push(...empties.slice(1));                // all empty: keep just one
+  });
+  // rows created purely by the ID import (their only entry is the "Employee ID" pseudo-date)
+  Object.keys(attendanceData).forEach(k => { const p = attendanceData[k], ks = Object.keys(p.dates || {}); if (ks.length === 1 && ks[0] === JUNK_DATE_KEY && caRowIsEmpty(p) && !remove.includes(k)) remove.push(k); });
+  const strip = Object.keys(attendanceData).filter(k => attendanceData[k].dates && JUNK_DATE_KEY in attendanceData[k].dates && !remove.includes(k));
+  return { remove, strip };
+}
 function cleanupIdImport() {
-  const rows = caJunkRows(), touched = caJunkCount();
-  const names = rows.map(k => attendanceData[k].displayName || k);
-  if (!confirm('Remove the leftovers from the employee ID import?\n\nExtra rows to delete (' + rows.length + '):\n' + (names.join(', ') || 'none') + '\n\nThe "Employee ID" column will also be removed from ' + (touched - rows.length) + ' other row(s). No other dates or points are changed.')) return;
+  const plan = caJunkPlan();
+  const names = plan.remove.map(k => attendanceData[k].displayName || k);
+  if (!confirm('Remove duplicate leftover rows?\n\nRows to delete (' + names.length + '):\n' + (names.join(', ') || 'none') + '\n\nThese have no dates or notes, and the same person has another row. The stray "Employee ID" column will also be removed from ' + plan.strip.length + ' other row(s). No real dates or points are changed.')) return;
   pushUndo();
   Object.values(attendanceData).forEach(p => { if (p.dates) delete p.dates[JUNK_DATE_KEY]; });
-  rows.forEach(k => delete attendanceData[k]);
+  plan.remove.forEach(k => delete attendanceData[k]);
   saveData(); rebuildDates(); renderTable();
-  toast('Removed ' + rows.length + ' extra rows', 'success');
+  toast('Removed ' + names.length + ' duplicate rows', 'success');
 }
 
 // ── Banner + auto prompt ──
 function updateCABanner() {
   const el = document.getElementById('caBanner'); if (!el) return;
   const keys = caPendingKeys().sort((a,b)=>(attendanceData[a].displayName||a).localeCompare(attendanceData[b].displayName||b));
-  const junk = caJunkCount() ? `<span style="display:inline-flex;gap:8px;align-items:center;margin-right:16px"><strong>&#9888; Leftover rows from the employee ID import found.</strong><button class="ca-chip" onclick="cleanupIdImport()">Review &amp; remove</button></span>` : '';
+  const jp = caJunkPlan();
+  const junk = (jp.remove.length || jp.strip.length) ? `<span style="display:inline-flex;gap:8px;align-items:center;margin-right:16px"><strong>&#9888; Duplicate leftover rows found (${jp.remove.length}).</strong><button class="ca-chip" onclick="cleanupIdImport()">Review &amp; remove</button></span>` : '';
   if (!keys.length && !junk) { el.classList.remove('active'); el.innerHTML = ''; return; }
   el.classList.add('active');
   el.innerHTML = junk + (keys.length ? '<strong>&#9888; Corrective action needed:</strong>' : '') + keys.map(k => {
