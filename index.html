@@ -363,12 +363,19 @@
       <div><label>Job Title</label><input type="text" id="caTitle" oninput="caRefresh()"></div>
       <div><label>Direct Supervisor</label><input type="text" id="caSupervisor" oninput="caRefresh()"></div>
       <div><label>Work Location</label><input type="text" id="caLocation" oninput="caRefresh()"></div>
+      <div><label>Email To (first name)</label><input type="text" id="caEmailTo" oninput="caRefresh()"></div>
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="btn primary" id="caTabForm" onclick="caSetView('form')">Form</button>
+      <button class="btn" id="caTabEmail" onclick="caSetView('email')">Email</button>
+    </div>
+    <iframe id="caEmailPreview" title="Email preview" style="display:none;width:100%;height:48vh;border:0;border-radius:8px;background:#fff"></iframe>
     <iframe id="caPreview" title="Corrective action preview" style="width:100%;height:48vh;border:0;border-radius:8px;background:#fff"></iframe>
     <div class="modal-actions" style="justify-content:space-between;flex-wrap:wrap">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="caDownload()">&#8595; Download (.doc)</button>
         <button class="btn" onclick="caPrint()">&#128438; Print / Save PDF</button>
+        <button class="btn" onclick="caCopyEmail()">&#9993; Copy email</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="closeCA()">Close</button>
@@ -1296,7 +1303,7 @@ function confirmClear() {
 // corrective-action form pre-filled from the occurrence history. "Record in
 // tracker" drops the 1st/2nd/Final/Terminated marker on the form date, which
 // resets their write-up points and clears them from the banner.
-const CA_CONFIG = { company: 'The Travel Agency: Soho', supervisor: 'Jennifer Bartholomeo', location: 'Soho', title: 'Budtender' };
+const CA_CONFIG = { company: 'The Travel Agency: Soho', supervisor: 'Jennifer Bartholomeo', location: 'Soho', title: 'Budtender', emailTo: 'Melissa' };
 const CA_THRESHOLD = 3;
 const CA_STAGES = {
   first:       { label: 'First Warning',  marker: '1st' },
@@ -1570,13 +1577,62 @@ ${hd('Future Expectation')}
 <tr><td colspan="20" width="700" style="${noBorder}padding-top:8px;text-align:center;font-size:9pt;font-weight:bold">CONFIDENTIAL</td></tr>
 </table>`;
 }
+// ── Email to HR asking to move forward with the warning ──
+const CA_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function caEmailHtml(d, to) {
+  const ptsWord = n => fmtPts(n) + (n <= 1 ? ' point' : ' points');
+  const P = 'margin:0 0 12px;';
+  const group = occ => {
+    const months = [];
+    occ.forEach(o => { const key = o.date.slice(0, 7); let m = months[months.length - 1]; if (!m || m.key !== key) months.push(m = { key, occ: [] }); m.occ.push(o); });
+    return months.map(m => {
+      const [y, mo] = m.key.split('-');
+      const sum = m.occ.reduce((a, o) => a + o.pts, 0);
+      return `<p style="${P}">${CA_MONTHS[parseInt(mo) - 1]} ${y} | ${ptsWord(sum)}</p><ul style="margin:0 0 12px 0;padding-left:40px">${m.occ.map(o => `<li>${fmtUS(o.date)} | ${escHtml(o.label)} | ${ptsWord(o.pts)}</li>`).join('')}</ul>`;
+    }).join('');
+  };
+  const total = occ => `<p style="${P}">Total Points: ${fmtPts(occ.reduce((a, o) => a + o.pts, 0))}</p>`;
+  const lastPrior = d.prior[d.prior.length - 1];
+  const priorLabel = { '1st': 'First Warning', '2nd': 'Second Warning', 'Final': 'Final Warning' };
+  const ask = d.stage === 'termination' ? 'move forward with Termination' : 'move forward with a ' + CA_STAGES[d.stage].marker + ' Warning';
+  const who = escHtml((d.title || 'Employee') + ', ' + d.first + ' ' + d.last);
+  const intro = lastPrior
+    ? `${who}, has been on a ${priorLabel[lastPrior.marker]} since ${fmtUS(lastPrior.date)} and continued to show a pattern of lateness and absences. Can we ${ask}. See breakdown.`
+    : `${who}, has reached ${fmtPts(d.occurrences.reduce((a, o) => a + o.pts, 0))} points and has shown a pattern of lateness and absences. Can we ${ask}. See breakdown.`;
+  let body = '';
+  d.prior.forEach(c => { body += `<p style="${P}">${c.marker} Delivered on ${fmtUS(c.date)}</p>${group(c.occurrences)}${total(c.occurrences)}`; });
+  if (d.prior.length) body += `<p style="${P}">For ${d.stage === 'termination' ? 'Termination' : CA_STAGES[d.stage].marker}</p>`;
+  body += group(d.occurrences) + total(d.occurrences);
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:12px;background:#fff;font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#222"><p style="${P}">Hey ${escHtml(to || '')},</p><p style="${P}">${intro}</p>${body}</body></html>`;
+}
+function caSetView(v) {
+  document.getElementById('caPreview').style.display = v === 'form' ? '' : 'none';
+  document.getElementById('caEmailPreview').style.display = v === 'email' ? '' : 'none';
+  document.getElementById('caTabForm').className = 'btn' + (v === 'form' ? ' primary' : '');
+  document.getElementById('caTabEmail').className = 'btn' + (v === 'email' ? ' primary' : '');
+}
+async function caCopyEmail() {
+  if (!caPerson) return;
+  const html = caEmailHtml(caFormData(), document.getElementById('caEmailTo').value.trim());
+  try {
+    const text = new DOMParser().parseFromString(html, 'text/html').body.innerText || '';
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+    toast('Email copied — paste it into your email', 'success');
+  } catch (e) {
+    const f = document.getElementById('caEmailPreview'), doc = f.contentDocument;
+    try { const r = doc.createRange(); r.selectNodeContents(doc.body); const sel = f.contentWindow.getSelection(); sel.removeAllRanges(); sel.addRange(r); doc.execCommand('copy'); toast('Email copied — paste it into your email', 'success'); }
+    catch (e2) { toast('Could not copy — select the email and copy manually', 'error'); }
+  }
+}
 function caDocHtml(d) {
   return `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="UTF-8"><title>Corrective Action - ${escHtml(d.last + ', ' + d.first)}</title>
 <style>@page{size:8.5in 11in;margin:0.5in}body{margin:0;padding:14px;background:#fff;font-family:Arial,Helvetica,sans-serif}@media print{body{padding:0}}</style></head><body>${caFormHtml(d)}</body></html>`;
 }
 function caRefresh() {
   if (!caPerson) return;
-  document.getElementById('caPreview').srcdoc = caDocHtml(caFormData());
+  const fd = caFormData();
+  document.getElementById('caPreview').srcdoc = caDocHtml(fd);
+  document.getElementById('caEmailPreview').srcdoc = caEmailHtml(fd, document.getElementById('caEmailTo').value.trim());
   document.getElementById('caRecordBtn').textContent = 'Record ' + CA_STAGES[document.getElementById('caStage').value].marker + ' in tracker';
 }
 function openCA(key) {
@@ -1595,6 +1651,8 @@ function openCA(key) {
   document.getElementById('caTitle').value = CA_CONFIG.title;
   document.getElementById('caSupervisor').value = CA_CONFIG.supervisor;
   document.getElementById('caLocation').value = CA_CONFIG.location;
+  document.getElementById('caEmailTo').value = CA_CONFIG.emailTo;
+  caSetView('form');
   document.getElementById('caModal').classList.add('active');
   caRefresh();
 }
