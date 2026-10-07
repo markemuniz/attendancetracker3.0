@@ -164,6 +164,16 @@
   .import-log-entry{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:0.65rem;color:var(--text-muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;flex-shrink:0}
   .import-log-entry .log-who{color:var(--accent);font-weight:600}
   .import-log-entry .log-sep{color:var(--border-light)}
+  /* Corrective action */
+  .ca-banner{display:none;align-items:center;gap:10px;padding:8px 24px;background:rgba(255,107,122,0.08);border-bottom:1px solid rgba(255,107,122,0.3);font-size:0.78rem;color:var(--red);flex-shrink:0;flex-wrap:wrap}
+  .ca-banner.active{display:flex}
+  .ca-banner .ca-chip{padding:3px 10px;border-radius:5px;border:1px solid rgba(255,107,122,0.4);background:rgba(255,107,122,0.1);color:var(--red);font-family:inherit;font-size:0.72rem;font-weight:600;cursor:pointer}
+  .ca-banner .ca-chip:hover{background:rgba(255,107,122,0.2)}
+  .ca-modal{width:860px;max-width:96vw}
+  .ca-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px}
+  .ca-grid label{display:block;font-size:0.65rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px}
+  .ca-grid input,.ca-grid select{width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:0.8rem;outline:none;color-scheme:dark}
+  .ca-grid input:focus,.ca-grid select:focus{border-color:var(--accent)}
   </style>
 </head>
 <body>
@@ -215,6 +225,7 @@
       <div class="key-item"><span class="sick-badge" style="margin-right:0">18.5</span> NYC-PS&amp;STO (Protected Safe &amp; Sick Time Off) hours remaining, 32/yr, before name</div>
     </div>
   </div>
+  <div class="ca-banner" id="caBanner"></div>
   <div class="toolbar">
     <input class="search-box" id="searchBox" type="text" placeholder="Search budtenders..." oninput="renderTable()">
     <div class="toolbar-right">
@@ -341,6 +352,32 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="caModal">
+  <div class="modal ca-modal">
+    <h3 style="font-style:italic">Corrective Action</h3>
+    <p class="subtitle" id="caSubtitle"></p>
+    <div class="ca-grid">
+      <div><label>Corrective Action</label><select id="caStage" onchange="caRefresh()"><option value="first">First Warning</option><option value="second">Second Warning</option><option value="final">Final Warning</option><option value="termination">Termination</option></select></div>
+      <div><label>Date</label><input type="date" id="caDate" onchange="caRefresh()"></div>
+      <div><label>Employee ID</label><input type="text" id="caEmpId" oninput="caRefresh()" placeholder="Not on file"></div>
+      <div><label>Job Title</label><input type="text" id="caTitle" oninput="caRefresh()"></div>
+      <div><label>Direct Supervisor</label><input type="text" id="caSupervisor" oninput="caRefresh()"></div>
+      <div><label>Work Location</label><input type="text" id="caLocation" oninput="caRefresh()"></div>
+    </div>
+    <iframe id="caPreview" title="Corrective action preview" style="width:100%;height:48vh;border:0;border-radius:8px;background:#fff"></iframe>
+    <div class="modal-actions" style="justify-content:space-between;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="caDownload()">&#8595; Download (.doc)</button>
+        <button class="btn" onclick="caPrint()">&#128438; Print / Save PDF</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="closeCA()">Close</button>
+        <button class="btn primary" id="caRecordBtn" onclick="caRecord()">Record in tracker</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -358,6 +395,7 @@ const auth = firebase.auth();
 const dataRef = firebase.database().ref('attendance');
 const importLogRef = firebase.database().ref('importLog');
 const manualDatesRef = firebase.database().ref('manualDates');
+const employeesRef = firebase.database().ref('employees');
 
 let currentUserEmail = '';
 
@@ -404,6 +442,7 @@ function showApp() {
   loadData();
   loadImportLog();
   loadManualDates();
+  loadEmployees();
 }
 auth.onAuthStateChanged(user => {
   if (user) {
@@ -649,11 +688,11 @@ document.addEventListener('click', e => {
 });
 function openImport() {
   document.getElementById('importModal').classList.add('active');
-  pendingImport = null;
+  pendingImport = null; pendingEmployees = null;
   document.getElementById('importPreview').style.display = 'none';
   document.getElementById('confirmImportBtn').style.display = 'none';
 }
-function closeImport() { document.getElementById('importModal').classList.remove('active'); pendingImport = null; }
+function closeImport() { document.getElementById('importModal').classList.remove('active'); pendingImport = null; pendingEmployees = null; }
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 dropZone.addEventListener('click', () => fileInput.click());
@@ -687,6 +726,7 @@ function processFile(file) {
       const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
       if (!rows.length) { toast('File appears empty', 'error'); return; }
       const cols = Object.keys(rows[0]);
+      if (cols.some(c => /employee.?(id|number|no)/i.test(c)) && cols.some(c => /first.?name/i.test(c)) && cols.some(c => /last.?name/i.test(c))) { parseEmployeeList(rows, cols); return; }
       const nameCol = cols.find(c => /^name$/i.test(c.trim())) || cols.find(c => /name/i.test(c));
       const dateCol = cols.find(c => /^date$/i.test(c.trim())) || cols.find(c => /date/i.test(c));
       const typeCol = cols.find(c => /^type$/i.test(c.trim())) || cols.find(c => /type/i.test(c));
@@ -880,7 +920,9 @@ function showPreview(parsed) {
   document.getElementById('confirmImportBtn').style.display = 'inline-flex';
 }
 function confirmImport() {
+  if (pendingEmployees) { confirmEmployeeImport(); return; }
   if (!pendingImport) return;
+  const caBefore = caPendingKeys();
   const snapshot = pendingImport;
   const count = Object.keys(snapshot).length;
 
@@ -914,6 +956,7 @@ function confirmImport() {
   closeImport();
   logImport(count, dateRange);
   toast('Imported ' + count + ' budtenders', 'success');
+  caAutoPrompt(caBefore);
 }
 function rebuildDates() {
   const s = new Set();
@@ -1154,6 +1197,7 @@ function renderTable() {
     const sickBadge=`<span class="sick-badge ${sickCls}" title="Unpaid sick hours remaining (32/yr)">${fmtSickRemaining(sickRemaining)}</span>`;
     return `<tr><td>${sickBadge}<span class="name-badge ${nc}">${fn}</span></td><td><span class="name-badge ${nc}">${ln}</span>${wuTag}</td><td class="${ptsColor(mainPts)}">${mainPts>0?mainPts%1===0?mainPts:mainPts.toFixed(1):'0'}</td><td class="${ptsColor(wp)}">${wp>0?wp%1===0?wp:wp.toFixed(1):'0'}</td>${cells}</tr>`;
   }).join('');
+  updateCABanner();
 }
 function fmtDateLong(d) {
   try { const dt=new Date(d+'T00:00:00'); return (dt.getMonth()+1).toString().padStart(2,'0')+'/'+dt.getDate().toString().padStart(2,'0')+'/'+dt.getFullYear(); }
@@ -1205,6 +1249,7 @@ function saveEdit() {
   if (!editingPerson||!editingDate) return;
   const val=document.getElementById('editInput').value.trim();
   const userNote=document.getElementById('userNoteInput').value.trim();
+  const caBefore=caPendingKeys();
   pushUndo();
   if (!attendanceData[editingPerson]) attendanceData[editingPerson]={displayName:editingPerson,dates:{}};
   if (!attendanceData[editingPerson].dates) attendanceData[editingPerson].dates={};
@@ -1212,6 +1257,7 @@ function saveEdit() {
   if (val) attendanceData[editingPerson].dates[editingDate]=val; else delete attendanceData[editingPerson].dates[editingDate];
   if (userNote) attendanceData[editingPerson].userNotes[editingDate]=userNote; else delete attendanceData[editingPerson].userNotes[editingDate];
   saveData(); rebuildDates(); renderTable(); closeEdit();
+  caAutoPrompt(caBefore);
 }
 function closeEdit() { document.getElementById('editModal').classList.remove('active'); editingPerson=editingDate=null; }
 function deletePerson() {
@@ -1244,6 +1290,282 @@ function confirmClear() {
   pushUndo();
   attendanceData={}; saveData(); rebuildDates(); renderTable(); toast('All data cleared','success');
 }
+// ── Corrective Action (auto-generated at 3 points) ───────────────────────────
+// Anyone whose current points (same number that turns the name red: points since
+// their last write-up, or last-90-days if never written up) reach 3 gets a
+// corrective-action form pre-filled from the occurrence history. "Record in
+// tracker" drops the 1st/2nd/Final/Terminated marker on the form date, which
+// resets their write-up points and clears them from the banner.
+const CA_CONFIG = { company: 'The Travel Agency: Soho', supervisor: 'Jennifer Bartholomeo', location: 'Soho', title: 'Budtender' };
+const CA_THRESHOLD = 3;
+const CA_STAGES = {
+  first:       { label: 'First Warning',  marker: '1st' },
+  second:      { label: 'Second Warning', marker: '2nd' },
+  final:       { label: 'Final Warning',  marker: 'Final' },
+  termination: { label: 'Termination',    marker: 'Terminated' }
+};
+let employees = {};       // { "first_last": { first, last, id } } — lives in Firebase, never in the repo
+let pendingEmployees = null;
+let caPerson = null;      // attendanceData key of the person in the modal
+let caOccurrences = [];
+
+function escHtml(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function splitName(name) {
+  let fn = '', ln = '';
+  if (name.includes(',')) { const parts = name.split(',').map(s => s.trim()); ln = parts[0]; fn = parts[1] || ''; }
+  else { const parts = name.split(' ').map(s => s.trim()).filter(Boolean); if (parts.length >= 2) { fn = parts[0]; ln = parts.slice(1).join(' '); } else { fn = parts[0] || name; } }
+  return { fn, ln };
+}
+function empKey(fn, ln) { return (fn + '_' + ln).toLowerCase().replace(/[^a-z0-9_]/g, ''); }
+
+// ── Employee ID list ──
+function loadEmployees() {
+  try { employees = JSON.parse(localStorage.getItem('bt_employees') || '{}') || {}; } catch(e) { employees = {}; }
+  employeesRef.on('value', snap => {
+    employees = snap.val() || {};
+    try { localStorage.setItem('bt_employees', JSON.stringify(employees)); } catch(e) {}
+  }, err => console.warn('Employees load failed, using cached list:', err.message));
+}
+function parseEmployeeList(rows, cols) {
+  const fnCol = cols.find(c => /first.?name/i.test(c));
+  const lnCol = cols.find(c => /last.?name/i.test(c));
+  const idCol = cols.find(c => /employee.?(id|number|no)/i.test(c));
+  const map = {};
+  rows.forEach(r => {
+    const fn = (r[fnCol] || '').toString().trim(), ln = (r[lnCol] || '').toString().trim();
+    const id = (r[idCol] === 0 ? '0' : (r[idCol] || '')).toString().trim();
+    if (!fn || !ln || !id) return;
+    map[empKey(fn, ln)] = { first: fn, last: ln, id };
+  });
+  const n = Object.keys(map).length;
+  if (!n) { toast('No employees with an ID found in this file', 'error'); return; }
+  pendingEmployees = map;
+  pendingImport = null;
+  const p = document.getElementById('importPreview');
+  p.innerHTML = `<p style="margin-bottom:8px"><strong>${n}</strong> employee IDs (used to fill corrective action forms)</p>
+    <table><thead><tr><th>Name</th><th>ID</th></tr></thead><tbody>
+    ${Object.values(map).slice(0,15).map(e => `<tr><td>${escHtml(e.first)} ${escHtml(e.last)}</td><td>${escHtml(e.id)}</td></tr>`).join('')}
+    ${n>15?`<tr><td colspan="2" style="color:var(--text-muted)">...+${n-15} more</td></tr>`:''}
+    </tbody></table>`;
+  p.style.display = 'block';
+  document.getElementById('confirmImportBtn').style.display = 'inline-flex';
+}
+function confirmEmployeeImport() {
+  const map = pendingEmployees; pendingEmployees = null;
+  employees = map;
+  try { localStorage.setItem('bt_employees', JSON.stringify(employees)); } catch(e) {}
+  employeesRef.set(map).catch(err => toast('Employee list save failed: ' + err.message, 'error'));
+  closeImport();
+  renderTable();
+  toast('Saved ' + Object.keys(map).length + ' employee IDs', 'success');
+}
+function findEmployeeId(fn, ln) {
+  const exact = employees[empKey(fn, ln)];
+  if (exact) return exact.id || '';
+  // nicknames / short forms (Will vs William): same last name, one first name starts with the other
+  const f = fn.toLowerCase(), l = ln.toLowerCase();
+  const hits = Object.values(employees).filter(e => (e.last || '').toLowerCase() === l && f && (e.first || '').toLowerCase() && ((e.first.toLowerCase().startsWith(f)) || f.startsWith(e.first.toLowerCase())));
+  return hits.length === 1 ? (hits[0].id || '') : '';
+}
+
+// ── Who needs a corrective action, and which one ──
+function caNextStage(dates) {
+  const wu = getLatestWriteup(dates);
+  if (wu === '1st') return 'second';
+  if (wu === '2nd') return 'final';
+  if (wu === 'final') return 'termination';
+  return 'first';   // never written up, or last cycle was marked Completed
+}
+function caCurrentPts(dates) { return getLatestWriteup(dates) !== null ? getWriteupPts(dates) : getLast90Pts(dates); }
+function caNeeds(person) {
+  if (!person || person.hidden) return false;
+  const dates = person.dates || {};
+  if (isTerminated(dates)) return false;
+  return caCurrentPts(dates) >= CA_THRESHOLD;
+}
+function caPendingKeys() { return Object.keys(attendanceData).filter(k => caNeeds(attendanceData[k])); }
+// The occurrences that make up the person's current points, oldest first.
+function caGetOccurrences(person) {
+  const dates = person.dates || {}, notes = person.notes || {};
+  const hasWU = getLatestWriteup(dates) !== null;
+  let lastWU = null;
+  if (hasWU) Object.entries(dates).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([d,v]) => { if (['1st','2nd','final','terminated','term','completed'].includes((v||'').toString().trim().toLowerCase())) lastWU = d; });
+  const today = new Date(); today.setHours(0,0,0,0);
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - 90);
+  const out = [];
+  Object.entries(dates).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([d,v]) => {
+    const pts = getPoints(v); if (!pts) return;
+    if (hasWU) { if (d <= lastWU) return; }
+    else { const ed = parseDate(d); if (!ed) return; ed.setHours(0,0,0,0); if (ed < cutoff || ed > today) return; }
+    out.push({ date: d, pts, label: caOccurrenceLabel(pts, notes[d] || '') });
+  });
+  return out;
+}
+function caOccurrenceLabel(pts, note) {
+  if (pts >= 1) return /no.?call|ncns/i.test(note) ? 'No Call/No Show' : 'Call Out';
+  let mins = null;
+  const shift = (note.match(/Shift:\s*([^|]+)/i) || [])[1], clock = (note.match(/Clocked:\s*([^|]+)/i) || [])[1];
+  if (shift && clock) mins = calcLateMinutes(shift.trim(), clock.trim());
+  if (mins === null) { const paren = (note.match(/\(([^)]*)\)/) || [])[1]; if (paren) mins = parseMins(paren); }
+  if (mins === null || mins <= 0) return 'Late';
+  mins = Math.round(mins);
+  return mins + (mins === 1 ? ' minute late' : ' minutes late');
+}
+function fmtPts(n) { return n % 1 === 0 ? String(n) : n.toFixed(1); }
+function fmtUS(ds) { const [y,m,d] = ds.split('-'); return parseInt(m) + '/' + parseInt(d) + '/' + y; }
+function todayYMD() { return toLocalYMD(new Date()); }
+
+// ── Cleanup for the employee-ID file being imported as attendance (old versions) ──
+// That import added an "Employee ID" pseudo-date to people and created extra
+// "Last, First" rows holding nothing else. Removes only those leftovers.
+const JUNK_DATE_KEY = 'Employee ID';
+function caJunkRows() {
+  return Object.keys(attendanceData).filter(k => {
+    const p = attendanceData[k], ks = Object.keys(p.dates || {});
+    return ks.length === 1 && ks[0] === JUNK_DATE_KEY && !(p.userNotes && Object.keys(p.userNotes).length);
+  });
+}
+function caJunkCount() { return Object.values(attendanceData).filter(p => p.dates && JUNK_DATE_KEY in p.dates).length; }
+function cleanupIdImport() {
+  const rows = caJunkRows(), touched = caJunkCount();
+  const names = rows.map(k => attendanceData[k].displayName || k);
+  if (!confirm('Remove the leftovers from the employee ID import?\n\nExtra rows to delete (' + rows.length + '):\n' + (names.join(', ') || 'none') + '\n\nThe "Employee ID" column will also be removed from ' + (touched - rows.length) + ' other row(s). No other dates or points are changed.')) return;
+  pushUndo();
+  Object.values(attendanceData).forEach(p => { if (p.dates) delete p.dates[JUNK_DATE_KEY]; });
+  rows.forEach(k => delete attendanceData[k]);
+  saveData(); rebuildDates(); renderTable();
+  toast('Removed ' + rows.length + ' extra rows', 'success');
+}
+
+// ── Banner + auto prompt ──
+function updateCABanner() {
+  const el = document.getElementById('caBanner'); if (!el) return;
+  const keys = caPendingKeys().sort((a,b)=>(attendanceData[a].displayName||a).localeCompare(attendanceData[b].displayName||b));
+  const junk = caJunkCount() ? `<span style="display:inline-flex;gap:8px;align-items:center;margin-right:16px"><strong>&#9888; Leftover rows from the employee ID import found.</strong><button class="ca-chip" onclick="cleanupIdImport()">Review &amp; remove</button></span>` : '';
+  if (!keys.length && !junk) { el.classList.remove('active'); el.innerHTML = ''; return; }
+  el.classList.add('active');
+  el.innerHTML = junk + (keys.length ? '<strong>&#9888; Corrective action needed:</strong>' : '') + keys.map(k => {
+    const p = attendanceData[k], nm = splitName(p.displayName || k);
+    const st = CA_STAGES[caNextStage(p.dates || {})].label;
+    return `<button class="ca-chip" data-key="${escHtml(k)}" onclick="openCA(this.dataset.key)">${escHtml(nm.fn + ' ' + nm.ln)} &middot; ${fmtPts(caCurrentPts(p.dates||{}))} pts &middot; ${st}</button>`;
+  }).join('');
+}
+function caAutoPrompt(before) {
+  const fresh = caPendingKeys().filter(k => !before.includes(k));
+  if (!fresh.length) return;
+  openCA(fresh[0]);
+  if (fresh.length > 1) toast((fresh.length - 1) + ' more budtender(s) also need a corrective action (see banner)', 'error');
+}
+
+// ── Form ──
+function caFormData() {
+  const p = attendanceData[caPerson]; const nm = splitName(p.displayName || caPerson);
+  return {
+    first: nm.fn, last: nm.ln,
+    stage: document.getElementById('caStage').value,
+    date: document.getElementById('caDate').value,
+    empId: document.getElementById('caEmpId').value.trim(),
+    title: document.getElementById('caTitle').value.trim(),
+    supervisor: document.getElementById('caSupervisor').value.trim(),
+    location: document.getElementById('caLocation').value.trim(),
+    occurrences: caOccurrences
+  };
+}
+function caExpectation(stage) {
+  const base = 'Consistent and punctual attendance is required. Immediate improvement is expected. ';
+  if (stage === 'final') return base + 'This is a final warning. Any further attendance issues will result in termination, in accordance with the Attendance & Punctuality and Progressive Discipline policies.';
+  if (stage === 'termination') return 'Due to continued attendance issues after prior corrective action, employment is terminated in accordance with the Attendance & Punctuality and Progressive Discipline policies.';
+  return base + 'Continued attendance issues may result in additional corrective action, up to and including termination, in accordance with the Attendance & Punctuality and Progressive Discipline policies.';
+}
+function caFormHtml(d) {
+  // One flat 20-column table (no nested tables) so Word / LibreOffice keep the column widths.
+  const box = on => on ? '&#9746;' : '&#9744;';
+  const total = d.occurrences.reduce((a, o) => a + o.pts, 0);
+  const hasLate = d.occurrences.some(o => o.pts < 1);
+  const B = 'border:1px solid #000;padding:4px 7px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;font-size:10pt;';
+  const td = (span, html, extra) => `<td colspan="${span}" width="${span * 35}" style="${B}${extra || ''}">${html}</td>`;
+  const lbl = t => `<div style="font-size:8pt;font-weight:bold;text-transform:uppercase">${t}</div>`;
+  const hd = t => `<tr>${td(20, t, 'background:#d9d9d9;font-size:8pt;font-weight:bold;text-transform:uppercase')}</tr>`;
+  const chk = (on, t) => `<div style="margin:1px 0">${box(on)} ${t}</div>`;
+  const stageRow = Object.entries(CA_STAGES).map(([k, s]) => td(5, `${box(d.stage === k)} ${s.label}`)).join('');
+  const list = d.occurrences.map(o => `<li>${fmtUS(o.date)} &ndash; ${escHtml(o.label)} &ndash; ${fmtPts(o.pts)}</li>`).join('');
+  const noBorder = 'border:none;padding:2px 0;font-family:Arial,Helvetica,sans-serif;';
+  return `<table width="700" style="width:700px;border-collapse:collapse;table-layout:fixed;font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#000">
+<colgroup>${'<col width="35" style="width:35px">'.repeat(20)}</colgroup>
+<tr><td colspan="20" width="700" style="${noBorder}text-align:center;font-size:9pt">${escHtml(CA_CONFIG.company)} Corrective Action Form</td></tr>
+<tr><td colspan="20" width="700" style="${noBorder}text-align:center;font-size:16pt;font-weight:bold;padding-bottom:6px">CORRECTIVE ACTION FORM</td></tr>
+<tr>${td(10, lbl('Employee Name') + escHtml(d.first + ' ' + d.last))}${td(10, lbl('Date') + (d.date ? fmtUS(d.date) : ''))}</tr>
+<tr>${td(10, lbl('Employee ID Number') + escHtml(d.empId) + '&nbsp;')}${td(10, lbl('Employee&rsquo;s Job Title') + escHtml(d.title))}</tr>
+<tr>${td(10, lbl('Direct Supervisor&rsquo;s Name') + escHtml(d.supervisor))}${td(10, lbl('Employee&rsquo;s Work Location') + escHtml(d.location))}</tr>
+${hd('Corrective Action To Be Taken (check one)')}
+<tr>${stageRow}</tr>
+${hd('Nature of Incident (check one)')}
+<tr>${td(10, '<div style="font-weight:bold">Unsatisfactory Performance</div>' + chk(false,'Not Meeting Job Role Expectations') + chk(true,'Attendance') + chk(hasLate,'Chronic Tardiness'))}${td(10, '<div style="font-weight:bold">Unsatisfactory Conduct</div>' + chk(false,'Negligent Conduct') + chk(false,'Inappropriate Conduct') + chk(false,'Insubordination') + chk(d.occurrences.some(o => /no call/i.test(o.label)),'No Call/No Show') + chk(true,'Violation of Policy'))}</tr>
+${hd('Incident Details')}
+<tr>${td(20, `<p style="margin:0 0 6px">${escHtml(d.first)} has failed to meet the Company&rsquo;s attendance, punctuality, and/or timekeeping expectations as outlined in policy. ${escHtml(d.first)} currently has ${fmtPts(total)} occurrences.</p><p style="margin:0"><b>Documented Occurrence(s):</b></p><ul style="margin:2px 0 2px 22px;padding:0">${list}</ul><p style="margin:0"><b>Total Occurrence: ${fmtPts(total)}</b></p>`)}</tr>
+${hd('Future Expectation')}
+<tr>${td(20, escHtml(caExpectation(d.stage)))}</tr>
+<tr>${td(7, lbl('Supervisor&rsquo;s Signature'), 'height:40px')}${td(3, lbl('Date'))}${td(7, lbl('HR Signature'))}${td(3, lbl('Date'))}</tr>
+<tr><td colspan="20" width="700" style="${noBorder}padding-top:8px;font-size:9pt">Your signature below indicates this warning has been reviewed with you, and has received a copy; It does not constitute agreement with this document.</td></tr>
+<tr>${td(14, lbl('Employee Signature'), 'height:40px')}${td(6, lbl('Date'))}</tr>
+<tr><td colspan="20" width="700" style="${noBorder}padding-top:8px;text-align:center;font-size:9pt;font-weight:bold">CONFIDENTIAL</td></tr>
+</table>`;
+}
+function caDocHtml(d) {
+  return `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="UTF-8"><title>Corrective Action - ${escHtml(d.last + ', ' + d.first)}</title>
+<style>@page{size:8.5in 11in;margin:0.5in}body{margin:0;padding:14px;background:#fff;font-family:Arial,Helvetica,sans-serif}@media print{body{padding:0}}</style></head><body>${caFormHtml(d)}</body></html>`;
+}
+function caRefresh() {
+  if (!caPerson) return;
+  document.getElementById('caPreview').srcdoc = caDocHtml(caFormData());
+  document.getElementById('caRecordBtn').textContent = 'Record ' + CA_STAGES[document.getElementById('caStage').value].marker + ' in tracker';
+}
+function openCA(key) {
+  const p = attendanceData[key]; if (!p) return;
+  const dates = p.dates || {}, nm = splitName(p.displayName || key);
+  caPerson = key;
+  caOccurrences = caGetOccurrences(p);
+  const total = caOccurrences.reduce((a, o) => a + o.pts, 0);
+  document.getElementById('caSubtitle').textContent = nm.fn + ' ' + nm.ln + ' — ' + fmtPts(total) + ' points';
+  document.getElementById('caStage').value = caNextStage(dates);
+  document.getElementById('caDate').value = todayYMD();
+  const id = findEmployeeId(nm.fn, nm.ln);
+  document.getElementById('caEmpId').value = id;
+  document.getElementById('caEmpId').placeholder = Object.keys(employees).length ? 'Not found in employee list' : 'Import employee ID list first';
+  document.getElementById('caTitle').value = CA_CONFIG.title;
+  document.getElementById('caSupervisor').value = CA_CONFIG.supervisor;
+  document.getElementById('caLocation').value = CA_CONFIG.location;
+  document.getElementById('caModal').classList.add('active');
+  caRefresh();
+}
+function closeCA() { document.getElementById('caModal').classList.remove('active'); caPerson = null; }
+function caFileBase() { const d = caFormData(); return `${d.last}, ${d.first[0] || ''}. ${CA_STAGES[d.stage].label} - Attendance`; }
+function caDownload() {
+  if (!caPerson) return;
+  const d = caFormData();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿', caDocHtml(d)], { type: 'application/msword' }));
+  a.download = caFileBase() + '.doc'; a.click();
+  toast('Downloaded', 'success');
+}
+function caPrint() {
+  const f = document.getElementById('caPreview');
+  if (f.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); }
+}
+function caRecord() {
+  if (!caPerson) return;
+  const d = caFormData(), p = attendanceData[caPerson], marker = CA_STAGES[d.stage].marker;
+  if (!d.date) { toast('Pick a date first', 'error'); return; }
+  const dates = p.dates || (p.dates = {});
+  if (Object.keys(dates).some(k => k > d.date && getPoints(dates[k]))) { toast('Form date must be on or after their last occurrence', 'error'); return; }
+  if (dates[d.date] && String(dates[d.date]).trim() !== marker) { toast('That date already has an entry (' + dates[d.date] + ') — pick an empty date', 'error'); return; }
+  pushUndo();
+  dates[d.date] = marker;
+  const name = splitName(p.displayName || caPerson).fn;
+  saveData(); rebuildDates(); renderTable(); closeCA();
+  toast(marker + ' recorded for ' + name, 'success');
+}
+// ───────────────────────────────────────────────────────────────
 function toast(msg,type) {
   const t=document.getElementById('toast');
   t.textContent=msg; t.className='toast '+(type||'')+' show';
