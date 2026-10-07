@@ -1440,6 +1440,12 @@ function caJunkPlan() {
   });
   // rows created purely by the ID import (their only entry is the "Employee ID" pseudo-date)
   Object.keys(attendanceData).forEach(k => { const p = attendanceData[k], ks = Object.keys(p.dates || {}); if (ks.length === 1 && ks[0] === JUNK_DATE_KEY && caRowIsEmpty(p) && !remove.includes(k)) remove.push(k); });
+  // never remove every row of a person who has more than one: keep the best one
+  Object.values(groups).forEach(keys => {
+    if (keys.length < 2 || !keys.every(k => remove.includes(k))) return;
+    const keep = keys.find(k => !(attendanceData[k].dates && JUNK_DATE_KEY in attendanceData[k].dates)) || keys[0];
+    remove.splice(remove.indexOf(keep), 1);
+  });
   const strip = Object.keys(attendanceData).filter(k => attendanceData[k].dates && JUNK_DATE_KEY in attendanceData[k].dates && !remove.includes(k));
   return { remove, strip };
 }
