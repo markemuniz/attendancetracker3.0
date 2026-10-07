@@ -1569,6 +1569,31 @@ function caLastWriteupDate(dates) {
   return last;
 }
 function caAlertSig(p) { const dates = p.dates || {}; return caNextStage(dates) + '|' + caLastWriteupDate(dates); }
+// Builds the same form + template email the pop-up shows, using its defaults
+// (next stage, today's date, ID from the employee list, CA_CONFIG.emailTo).
+function caAlertAttachments(k) {
+  const empty = { email: '', form: '', filename: '' };
+  try {
+    const p = attendanceData[k], dates = p.dates || {}, nm = splitName(p.displayName || k);
+    const stage = caNextStage(dates);
+    const d = {
+      first: nm.fn, last: nm.ln, stage, date: todayYMD(),
+      empId: findEmployeeId(nm.fn, nm.ln) || caRowId(p) || findRowEmployeeId(nm.fn, nm.ln) || '',
+      title: CA_CONFIG.title, supervisor: CA_CONFIG.supervisor, location: CA_CONFIG.location,
+      sickRemaining: getSickHoursRemaining(dates),
+      occurrences: caGetOccurrences(p),
+      prior: stage === 'first' ? [] : caGetPriorCycles(p)
+    };
+    const bytes = new TextEncoder().encode('﻿' + caDocHtml(d));
+    let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    const email = caEmailHtml(d, CA_CONFIG.emailTo);
+    return {
+      email: (email.match(/<body[^>]*>([\s\S]*)<\/body>/i) || [, email])[1],
+      form: 'data:application/msword;base64,' + btoa(bin),
+      filename: `${d.last}, ${d.first[0] || ''}. ${CA_STAGES[stage].label} - Attendance.doc`
+    };
+  } catch (e) { console.warn('Could not build corrective action attachments:', e); return empty; }
+}
 function caSyncAlerts() {
   if (!caAlertsLoaded || !caDataLoaded || !window.emailjs) return;
   const pending = caPendingKeys();
@@ -1581,10 +1606,14 @@ function caSyncAlerts() {
       if (!res.committed) return;   // someone else already sent it
       const p = attendanceData[k]; if (!p) return;
       const nm = splitName(p.displayName || k);
+      const att = caAlertAttachments(k);
       return emailjs.send(CA_EMAIL.serviceId, CA_EMAIL.templateId, {
         employee_name: (nm.fn + ' ' + nm.ln).trim(),
         points: fmtPts(caCurrentPts(p.dates || {})),
-        next_stage: CA_STAGES[caNextStage(p.dates || {})].label
+        next_stage: CA_STAGES[caNextStage(p.dates || {})].label,
+        ca_email: att.email,
+        ca_form: att.form,
+        ca_filename: att.filename
       }).then(() => toast('Alert emailed: ' + nm.fn + ' ' + nm.ln + ' reached ' + CA_THRESHOLD + ' points', 'success'))
         .catch(err => {
           console.warn('EmailJS send failed:', err);
