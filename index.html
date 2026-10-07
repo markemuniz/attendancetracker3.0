@@ -1515,6 +1515,7 @@ function caFormData() {
     title: document.getElementById('caTitle').value.trim(),
     supervisor: document.getElementById('caSupervisor').value.trim(),
     location: document.getElementById('caLocation').value.trim(),
+    sickRemaining: getSickHoursRemaining(attendanceData[caPerson].dates || {}),
     occurrences: caOccurrences,
     prior: document.getElementById('caStage').value === 'first' ? [] : caPriorCycles
   };
@@ -1596,9 +1597,10 @@ function caEmailHtml(d, to) {
   const priorLabel = { '1st': 'First Warning', '2nd': 'Second Warning', 'Final': 'Final Warning' };
   const ask = d.stage === 'termination' ? 'move forward with Termination' : 'move forward with a ' + CA_STAGES[d.stage].marker + ' Warning';
   const who = escHtml((d.title || 'Employee') + ', ' + d.first + ' ' + d.last);
+  const sick = d.sickRemaining <= 0 ? ' They have used all their NY Safe and Sick Leave.' : ` They have ${fmtSickRemaining(d.sickRemaining)} hours of NY Safe and Sick Leave remaining.`;
   const intro = lastPrior
-    ? `${who}, has been on a ${priorLabel[lastPrior.marker]} since ${fmtUS(lastPrior.date)} and continued to show a pattern of lateness and absences. Can we ${ask}. See breakdown.`
-    : `${who}, has reached ${fmtPts(d.occurrences.reduce((a, o) => a + o.pts, 0))} points and has shown a pattern of lateness and absences. Can we ${ask}. See breakdown.`;
+    ? `${who}, has been on a ${priorLabel[lastPrior.marker]} since ${fmtUS(lastPrior.date)} and continued to show a pattern of lateness and absences.${sick} Can we ${ask}. See breakdown.`
+    : `${who}, has reached ${fmtPts(d.occurrences.reduce((a, o) => a + o.pts, 0))} points and has shown a pattern of lateness and absences.${sick} Can we ${ask}. See breakdown.`;
   let body = '';
   d.prior.forEach(c => { body += `<p style="${P}">${c.marker} Delivered on ${fmtUS(c.date)}</p>${group(c.occurrences)}${total(c.occurrences)}`; });
   if (d.prior.length) body += `<p style="${P}">For ${d.stage === 'termination' ? 'Termination' : CA_STAGES[d.stage].marker}</p>`;
