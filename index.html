@@ -1370,7 +1370,10 @@ function confirmEmployeeImport() {
 // Older versions imported the ID file as attendance, leaving each ID in the person's row
 // under an "Employee ID" pseudo-date. Read the ID from there when the employee list has none.
 function caRowId(p) {
-  const k = Object.keys((p && p.dates) || {}).find(k => /^employee.?(id|number|no)$/i.test(k.trim()));
+  const keys = Object.keys((p && p.dates) || {});
+  // the column is named like an ID, or (whatever it is called) is not a date and holds a plain number
+  const k = keys.find(k => /^(employee.?)?(id|number|no)$/i.test(k.trim()))
+         || keys.find(k => !/^\d{4}-\d{2}-\d{2}/.test(k) && /^\d{3,8}$/.test(String(p.dates[k]).trim()));
   return k ? String(p.dates[k] == null ? '' : p.dates[k]).trim() : '';
 }
 function findRowEmployeeId(fn, ln) {
