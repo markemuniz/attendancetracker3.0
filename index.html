@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4.4.1/dist/email.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -403,6 +404,7 @@ const dataRef = firebase.database().ref('attendance');
 const importLogRef = firebase.database().ref('importLog');
 const manualDatesRef = firebase.database().ref('manualDates');
 const employeesRef = firebase.database().ref('employees');
+const caAlertsRef = firebase.database().ref('caAlertsSent');
 
 let currentUserEmail = '';
 
@@ -450,6 +452,7 @@ function showApp() {
   loadImportLog();
   loadManualDates();
   loadEmployees();
+  loadCAAlerts();
 }
 auth.onAuthStateChanged(user => {
   if (user) {
@@ -578,6 +581,7 @@ function confirmAddDate() {
 function loadData() {
   dataRef.on('value', snap => {
     attendanceData = snap.val() || {};
+    caDataLoaded = true;
     localStorage.setItem('bt_attendance', JSON.stringify(attendanceData));
     rebuildDates(); renderTable();
     if (initialLoad) {
@@ -1535,9 +1539,65 @@ function cleanupIdImport() {
   toast('Removed ' + names.length + ' duplicate rows', 'success');
 }
 
+// ── Email alert at 3 points (EmailJS) ──
+// One email per person per discipline cycle. The "sent" marker lives in Firebase
+// (caAlertsSent/<key> = stage|last write-up date) and is claimed with a transaction,
+// so only one open copy of the tracker sends it. The marker is cleared once the
+// person drops off the corrective-action list (write-up recorded, points aged out),
+// so the next time they reach 3 they trigger a new email.
+const CA_EMAIL = { serviceId: 'service_tgk1onn', templateId: 'template_bh108b2', publicKey: 'N7F3dgrAKHdLinMWF' };
+let caAlertsSent = {};
+let caAlertsLoaded = false;
+let caDataLoaded = false;
+const caSendFailed = new Set();   // don't retry in a loop this session if EmailJS keeps failing
+if (window.emailjs) emailjs.init({ publicKey: CA_EMAIL.publicKey });
+
+function loadCAAlerts() {
+  caAlertsRef.on('value', snap => {
+    caAlertsSent = snap.val() || {};
+    caAlertsLoaded = true;
+    caSyncAlerts();
+  }, err => console.warn('Alert markers load failed, email alerts paused:', err.message));
+}
+function caLastWriteupDate(dates) {
+  let last = 'none';
+  Object.entries(dates || {}).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([d,v]) => {
+    if (['1st','2nd','final','terminated','term','completed'].includes((v||'').toString().trim().toLowerCase())) last = d;
+  });
+  return last;
+}
+function caAlertSig(p) { const dates = p.dates || {}; return caNextStage(dates) + '|' + caLastWriteupDate(dates); }
+function caSyncAlerts() {
+  if (!caAlertsLoaded || !caDataLoaded || !window.emailjs) return;
+  const pending = caPendingKeys();
+  // clear markers for people no longer on the list
+  Object.keys(caAlertsSent).forEach(k => { if (!pending.includes(k)) caAlertsRef.child(k).remove().catch(()=>{}); });
+  pending.forEach(k => {
+    const sig = caAlertSig(attendanceData[k]);
+    if (caAlertsSent[k] === sig || caSendFailed.has(k + '|' + sig)) return;
+    caAlertsRef.child(k).transaction(cur => cur === sig ? undefined : sig).then(res => {
+      if (!res.committed) return;   // someone else already sent it
+      const p = attendanceData[k]; if (!p) return;
+      const nm = splitName(p.displayName || k);
+      return emailjs.send(CA_EMAIL.serviceId, CA_EMAIL.templateId, {
+        employee_name: (nm.fn + ' ' + nm.ln).trim(),
+        points: fmtPts(caCurrentPts(p.dates || {})),
+        next_stage: CA_STAGES[caNextStage(p.dates || {})].label
+      }).then(() => toast('Alert emailed: ' + nm.fn + ' ' + nm.ln + ' reached ' + CA_THRESHOLD + ' points', 'success'))
+        .catch(err => {
+          console.warn('EmailJS send failed:', err);
+          caSendFailed.add(k + '|' + sig);
+          toast('Alert email failed for ' + nm.fn + ' ' + nm.ln, 'error');
+          caAlertsRef.child(k).remove().catch(()=>{});   // allow a retry next load
+        });
+    }).catch(err => console.warn('Alert marker save failed:', err.message));
+  });
+}
+
 // ── Banner + auto prompt ──
 function updateCABanner() {
   const el = document.getElementById('caBanner'); if (!el) return;
+  caSyncAlerts();
   const keys = caPendingKeys().sort((a,b)=>(attendanceData[a].displayName||a).localeCompare(attendanceData[b].displayName||b));
   const jp = caJunkPlan();
   const junk = (jp.remove.length || jp.strip.length) ? `<span style="display:inline-flex;gap:8px;align-items:center;margin-right:16px"><strong>&#9888; Duplicate leftover rows found (${jp.remove.length}).</strong><button class="ca-chip" onclick="cleanupIdImport()">Review &amp; remove</button></span>` : '';
