@@ -965,7 +965,7 @@ function confirmImport() {
   });
 
   // Every day the import covers gets a column, even with zero occurrences
-  const coverDates = Array.from(new Set(allImportDates.concat(pendingImportDates))).sort();
+  const coverDates = Array.from(new Set(allImportDates.concat(pendingImportDates))).filter(isYMD).sort();
   if (coverDates.length) {
     const y = new Date(); y.setDate(y.getDate() - 1);
     const yesterday = toLocalYMD(y);
@@ -991,10 +991,12 @@ function confirmImport() {
   toast('Imported ' + count + ' budtenders', 'success');
   caAutoPrompt(caBefore);
 }
+// Only real YYYY-MM-DD keys become date columns; other keys (like an imported "Employee ID") are skipped
+function isYMD(d) { return /^\d{4}-\d{2}-\d{2}$/.test(d); }
 function rebuildDates() {
   const s = new Set();
-  Object.values(attendanceData).forEach(p => { if (p.dates) Object.keys(p.dates).forEach(d => s.add(d)); });
-  manualDates.forEach(d => s.add(d));
+  Object.values(attendanceData).forEach(p => { if (p.dates) Object.keys(p.dates).forEach(d => { if (isYMD(d)) s.add(d); }); });
+  manualDates.forEach(d => { if (isYMD(d)) s.add(d); });
   const sorted = Array.from(s).sort();
   if (!sorted.length) { allDates = []; return; }
   // Fill every calendar day between the earliest and latest recorded date,
