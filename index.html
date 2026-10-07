@@ -1415,13 +1415,36 @@ function fmtPts(n) { return n % 1 === 0 ? String(n) : n.toFixed(1); }
 function fmtUS(ds) { const [y,m,d] = ds.split('-'); return parseInt(m) + '/' + parseInt(d) + '/' + y; }
 function todayYMD() { return toLocalYMD(new Date()); }
 
+// ── Cleanup for the employee-ID file being imported as attendance (old versions) ──
+// That import added an "Employee ID" pseudo-date to people and created extra
+// "Last, First" rows holding nothing else. Removes only those leftovers.
+const JUNK_DATE_KEY = 'Employee ID';
+function caJunkRows() {
+  return Object.keys(attendanceData).filter(k => {
+    const p = attendanceData[k], ks = Object.keys(p.dates || {});
+    return ks.length === 1 && ks[0] === JUNK_DATE_KEY && !(p.userNotes && Object.keys(p.userNotes).length);
+  });
+}
+function caJunkCount() { return Object.values(attendanceData).filter(p => p.dates && JUNK_DATE_KEY in p.dates).length; }
+function cleanupIdImport() {
+  const rows = caJunkRows(), touched = caJunkCount();
+  const names = rows.map(k => attendanceData[k].displayName || k);
+  if (!confirm('Remove the leftovers from the employee ID import?\n\nExtra rows to delete (' + rows.length + '):\n' + (names.join(', ') || 'none') + '\n\nThe "Employee ID" column will also be removed from ' + (touched - rows.length) + ' other row(s). No other dates or points are changed.')) return;
+  pushUndo();
+  Object.values(attendanceData).forEach(p => { if (p.dates) delete p.dates[JUNK_DATE_KEY]; });
+  rows.forEach(k => delete attendanceData[k]);
+  saveData(); rebuildDates(); renderTable();
+  toast('Removed ' + rows.length + ' extra rows', 'success');
+}
+
 // ── Banner + auto prompt ──
 function updateCABanner() {
   const el = document.getElementById('caBanner'); if (!el) return;
   const keys = caPendingKeys().sort((a,b)=>(attendanceData[a].displayName||a).localeCompare(attendanceData[b].displayName||b));
-  if (!keys.length) { el.classList.remove('active'); el.innerHTML = ''; return; }
+  const junk = caJunkCount() ? `<span style="display:inline-flex;gap:8px;align-items:center;margin-right:16px"><strong>&#9888; Leftover rows from the employee ID import found.</strong><button class="ca-chip" onclick="cleanupIdImport()">Review &amp; remove</button></span>` : '';
+  if (!keys.length && !junk) { el.classList.remove('active'); el.innerHTML = ''; return; }
   el.classList.add('active');
-  el.innerHTML = '<strong>&#9888; Corrective action needed:</strong>' + keys.map(k => {
+  el.innerHTML = junk + (keys.length ? '<strong>&#9888; Corrective action needed:</strong>' : '') + keys.map(k => {
     const p = attendanceData[k], nm = splitName(p.displayName || k);
     const st = CA_STAGES[caNextStage(p.dates || {})].label;
     return `<button class="ca-chip" data-key="${escHtml(k)}" onclick="openCA(this.dataset.key)">${escHtml(nm.fn + ' ' + nm.ln)} &middot; ${fmtPts(caCurrentPts(p.dates||{}))} pts &middot; ${st}</button>`;
