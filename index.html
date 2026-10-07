@@ -920,7 +920,20 @@ function parseGrid(rows, fnCol, lnCol, cols) {
   });
   showPreview(parsed);
 }
+// Managers don't clock in/out, so imports would show them as no-shows.
+// They're dropped from every import, hidden from the table, and never trigger alert emails.
+const MANAGERS = [['mark','muniz'], ['jeff','mchale']];
+function isManager(name) {
+  const s = (name || '').toString().toLowerCase();
+  let fn, ln;
+  if (s.includes(',')) { const p = s.split(','); ln = p[0]; fn = p[1] || ''; }
+  else { const p = s.trim().split(/\s+/); fn = p[0] || ''; ln = p[p.length - 1] || ''; }
+  fn = fn.trim().split(/\s+/)[0] || ''; ln = ln.trim().split(/\s+/).pop() || '';
+  const clean = x => x.replace(/[^a-z]/g, '');
+  return MANAGERS.some(([f, l]) => clean(fn) === f && clean(ln) === l);
+}
 function showPreview(parsed) {
+  Object.keys(parsed).forEach(k => { if (isManager(parsed[k].displayName || k)) delete parsed[k]; });
   pendingImport = parsed;
   const names = Object.keys(parsed);
   let ti = 0; names.forEach(n => ti += Object.keys(parsed[n].dates).length);
@@ -1185,7 +1198,7 @@ function getPeriodPoints(dates,periodKey,keyFn) {
 }
 function renderTable() {
   const q=(document.getElementById('searchBox').value||'').toLowerCase();
-  const people=Object.entries(attendanceData).filter(([k,v])=>(v.displayName||k).toLowerCase().includes(q)).sort((a,b)=>(a[1].displayName||a[0]).localeCompare(b[1].displayName||b[0]));
+  const people=Object.entries(attendanceData).filter(([k,v])=>!isManager(v.displayName||k)&&(v.displayName||k).toLowerCase().includes(q)).sort((a,b)=>(a[1].displayName||a[0]).localeCompare(b[1].displayName||b[0]));
   if (!people.length&&!Object.keys(attendanceData).length) {
     document.getElementById('emptyState').style.display='block';
     document.getElementById('mainTable').style.display='none'; return;
@@ -1433,12 +1446,12 @@ function caNextStage(dates) {
 }
 function caCurrentPts(dates) { return getLatestWriteup(dates) !== null ? getWriteupPts(dates) : getLast90Pts(dates); }
 function caNeeds(person) {
-  if (!person || person.hidden) return false;
+  if (!person || person.hidden || isManager(person.displayName)) return false;
   const dates = person.dates || {};
   if (isTerminated(dates)) return false;
   return caCurrentPts(dates) >= CA_THRESHOLD;
 }
-function caPendingKeys() { return Object.keys(attendanceData).filter(k => caNeeds(attendanceData[k])); }
+function caPendingKeys() { return Object.keys(attendanceData).filter(k => !isManager(k) && caNeeds(attendanceData[k])); }
 // The occurrences that make up the person's current points, oldest first.
 function caGetOccurrences(person) {
   const dates = person.dates || {}, notes = person.notes || {};
