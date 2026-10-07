@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4.4.1/dist/email.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -403,6 +404,7 @@ const dataRef = firebase.database().ref('attendance');
 const importLogRef = firebase.database().ref('importLog');
 const manualDatesRef = firebase.database().ref('manualDates');
 const employeesRef = firebase.database().ref('employees');
+const caAlertsRef = firebase.database().ref('caAlerts');
 
 let currentUserEmail = '';
 
@@ -1305,6 +1307,10 @@ function confirmClear() {
 // resets their write-up points and clears them from the banner.
 const CA_CONFIG = { company: 'The Travel Agency: Soho', supervisor: 'Jennifer Bartholomeo', location: 'Soho', title: 'Budtender', emailTo: 'Melissa' };
 const CA_THRESHOLD = 3;
+// Email alert when someone reaches the threshold (sent through EmailJS, free plan is fine).
+// Fill these in from your EmailJS dashboard; they are safe to keep in the page. The
+// recipient address lives in the EmailJS template, not here. Leave blank to turn alerts off.
+const CA_EMAIL = { serviceId: '', templateId: '', publicKey: '' };
 const CA_STAGES = {
   first:       { label: 'First Warning',  marker: '1st' },
   second:      { label: 'Second Warning', marker: '2nd' },
@@ -1527,9 +1533,38 @@ function updateCABanner() {
     return `<button class="ca-chip" data-key="${escHtml(k)}" onclick="openCA(this.dataset.key)">${escHtml(nm.fn + ' ' + nm.ln)} &middot; ${fmtPts(caCurrentPts(p.dates||{}))} pts &middot; ${st}</button>`;
   }).join('');
 }
+// One email per person per warning stage: claimed in Firebase so two devices (or a re-import) never double-send.
+function caNotify(keys) {
+  if (!CA_EMAIL.serviceId || !CA_EMAIL.templateId || !CA_EMAIL.publicKey || typeof emailjs === 'undefined') return;
+  keys.forEach(k => {
+    const p = attendanceData[k]; if (!p) return;
+    const nm = splitName(p.displayName || k), stage = caNextStage(p.dates || {});
+    const id = (k + '__' + stage).replace(/[.$#\[\]\/]/g, '_');
+    const occ = caGetOccurrences(p);
+    const params = {
+      employee_name: nm.fn + ' ' + nm.ln,
+      points: fmtPts(occ.reduce((a, o) => a + o.pts, 0)),
+      next_stage: CA_STAGES[stage].label,
+      occurrences: occ.map(o => fmtUS(o.date) + ' | ' + o.label + ' | ' + fmtPts(o.pts)).join('\n'),
+      app_url: location.href.split('#')[0]
+    };
+    const send = release => emailjs.send(CA_EMAIL.serviceId, CA_EMAIL.templateId, params, { publicKey: CA_EMAIL.publicKey })
+      .then(() => toast('Email sent: ' + params.employee_name + ' reached ' + params.points + ' points', 'success'))
+      .catch(err => { release(); console.warn('Alert email failed:', err); toast('Alert email failed for ' + params.employee_name, 'error'); });
+    caAlertsRef.child(id).transaction(cur => cur ? undefined : { at: Date.now() }, (err, committed) => {
+      if (err) {   // no write access to the alerts path: fall back to this browser's own record
+        const lk = 'bt_ca_sent'; let sent = {}; try { sent = JSON.parse(localStorage.getItem(lk) || '{}'); } catch(e) {}
+        if (sent[id]) return;
+        sent[id] = 1; try { localStorage.setItem(lk, JSON.stringify(sent)); } catch(e) {}
+        send(() => { delete sent[id]; try { localStorage.setItem(lk, JSON.stringify(sent)); } catch(e) {} });
+      } else if (committed) send(() => caAlertsRef.child(id).remove());
+    });
+  });
+}
 function caAutoPrompt(before) {
   const fresh = caPendingKeys().filter(k => !before.includes(k));
   if (!fresh.length) return;
+  caNotify(fresh);
   openCA(fresh[0]);
   if (fresh.length > 1) toast((fresh.length - 1) + ' more budtender(s) also need a corrective action (see banner)', 'error');
 }
