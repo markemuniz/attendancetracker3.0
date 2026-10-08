@@ -1358,7 +1358,7 @@ function confirmClear() {
 const CA_FOLDER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 const CA_CONFIG = { company: 'The Travel Agency: Soho', supervisor: 'Jennifer Bartholomeo', location: 'Soho', title: 'Budtender', emailTo: 'Melissa' };
 // First names of supervisors; anyone else defaults to CA_CONFIG.title
-const CA_SUPERVISORS = ['tamika', 'joseph', 'joshua', 'miguel', 'owen', 'mic'];
+const CA_SUPERVISORS = ['tamika', 'joseph', 'joshua', 'miguel', 'owen', 'mic', 'marcellus'];
 function caTitleFor(fn) { return CA_SUPERVISORS.includes((fn || '').trim().split(/\s+/)[0].toLowerCase()) ? 'Supervisor' : CA_CONFIG.title; }
 const CA_THRESHOLD = 3;
 const CA_STAGES = {
@@ -1493,7 +1493,8 @@ function caGetPriorCycles(person) {
   let chain = [], bucket = [];
   Object.entries(dates).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([d,v]) => {
     const val = (v||'').toString().trim().toLowerCase();
-    if (stages[val]) { chain.push({ marker: stages[val], date: d, occurrences: bucket }); bucket = []; }
+    // write-ups delivered before the tracker had the data: occurrences saved under person.priorWriteups[date]
+    if (stages[val]) { const saved = (person.priorWriteups || {})[d]; chain.push({ marker: stages[val], date: d, occurrences: (!bucket.length && saved && saved.occurrences) ? saved.occurrences : bucket }); bucket = []; }
     else if (['completed','terminated','term'].includes(val)) { chain = []; bucket = []; }
     else { const pts = getPoints(v); if (pts) bucket.push({ date: d, pts, label: caOccurrenceLabel(pts, notes[d] || '') }); }
   });
