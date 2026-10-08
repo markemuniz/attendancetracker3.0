@@ -1677,6 +1677,7 @@ function caFormData() {
 }
 function caExpectation(stage) {
   const base = 'Consistent and punctual attendance is required. Immediate improvement is expected. ';
+  if (stage === 'second') return 'Immediate and sustained improvement in attendance and punctuality is required. Any additional unexcused occurrences may result in further disciplinary action, up to and including termination.';
   if (stage === 'final') return base + 'This is a final warning. Any further attendance issues will result in termination, in accordance with the Attendance & Punctuality and Progressive Discipline policies.';
   if (stage === 'termination') return 'Due to continued attendance issues after prior corrective action, employment is terminated in accordance with the Attendance & Punctuality and Progressive Discipline policies.';
   return base + 'Continued attendance issues may result in additional corrective action, up to and including termination, in accordance with the Attendance & Punctuality and Progressive Discipline policies.';
