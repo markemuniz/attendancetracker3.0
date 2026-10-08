@@ -170,6 +170,9 @@
   .ca-banner.active{display:flex}
   .ca-banner .ca-chip{padding:3px 10px;border-radius:5px;border:1px solid rgba(255,107,122,0.4);background:rgba(255,107,122,0.1);color:var(--red);font-family:inherit;font-size:0.72rem;font-weight:600;cursor:pointer}
   .ca-banner .ca-chip:hover{background:rgba(255,107,122,0.2)}
+  .ca-folder{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;margin-left:6px;padding:0;vertical-align:middle;border-radius:5px;border:1px solid rgba(255,107,122,0.4);background:rgba(255,107,122,0.1);color:var(--red);cursor:pointer;transition:background 0.15s}
+  .ca-folder:hover{background:rgba(255,107,122,0.25)}
+  .ca-folder svg{width:13px;height:13px}
   .ca-modal{width:860px;max-width:96vw}
   .ca-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px}
   .ca-grid label{display:block;font-size:0.65rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px}
@@ -223,6 +226,7 @@
       <div class="key-sep"></div>
       <div class="key-item"><span style="color:#facc15;font-size:0.85rem">&#9733;</span> Has note</div>
       <div class="key-sep"></div>
+      <div class="key-item"><span class="ca-folder" style="margin-left:0;cursor:default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span> Corrective action needed (click to open)</div>
       <div class="key-item"><span class="sick-badge" style="margin-right:0">18.5</span> NYC-PS&amp;STO (Protected Safe &amp; Sick Time Off) hours remaining, 32/yr, before name</div>
     </div>
   </div>
@@ -1224,6 +1228,7 @@ function renderTable() {
     ?filteredPeriods.map(p=>`<th class="period-col">${periodInfo.fmtFn(p)}</th>`).join('')
     :filteredDates.map(d=>`<th class="date-col">${fmtDate(d)}</th>`).join('');
   document.getElementById('tableHead').innerHTML=`<tr><th>First Name</th><th>Last Name</th><th><span class="header-dropdown" onclick="togglePtsDropdown(event)">${ptsLabel}</span></th><th>Write-Up Pts</th>${headerCols}</tr>`;
+  const caPending=new Set(caPendingKeys());
   document.getElementById('tableBody').innerHTML=people.map(([key,person])=>{
     const name=person.displayName||key;
     let fn='',ln='';
@@ -1234,6 +1239,7 @@ function renderTable() {
     const wp=getWriteupPts(dates);
     if (!showHidden&&person.hidden) return '';
     const termed=isTerminated(dates), nc=getNameColor(dates,termed), wuTag=getWriteupTagHtml(dates);
+    const caFolder=caPending.has(key)?`<button class="ca-folder" data-key="${escHtml(key)}" onclick="openCA(this.dataset.key)" title="Corrective action needed: ${CA_STAGES[caNextStage(dates)].label} (${fmtPts(caCurrentPts(dates))} pts). Click to open.">${CA_FOLDER_SVG}</button>`:'';
     let cells;
     if (periodInfo) {
       cells=filteredPeriods.map(p=>{ const pts=getPeriodPoints(dates,p,periodInfo.keyFn); const display=pts===0?'<span style="color:var(--text-muted)">&#183;</span>':(pts%1===0?pts:pts.toFixed(1)); return `<td class="period-cell ${pts>0?ptsColor(pts):''}">${display}</td>`; }).join('');
@@ -1243,7 +1249,7 @@ function renderTable() {
     const sickRemaining=getSickHoursRemaining(dates);
     const sickCls=sickRemaining<=0?'sick-empty':(sickRemaining<=8?'sick-low':'');
     const sickBadge=`<span class="sick-badge ${sickCls}" title="Unpaid sick hours remaining (32/yr)">${fmtSickRemaining(sickRemaining)}</span>`;
-    return `<tr><td>${sickBadge}<span class="name-badge ${nc}">${fn}</span></td><td><span class="name-badge ${nc}">${ln}</span>${wuTag}</td><td class="${ptsColor(mainPts)}">${mainPts>0?mainPts%1===0?mainPts:mainPts.toFixed(1):'0'}</td><td class="${ptsColor(wp)}">${wp>0?wp%1===0?wp:wp.toFixed(1):'0'}</td>${cells}</tr>`;
+    return `<tr><td>${sickBadge}<span class="name-badge ${nc}">${fn}</span></td><td><span class="name-badge ${nc}">${ln}</span>${wuTag}${caFolder}</td><td class="${ptsColor(mainPts)}">${mainPts>0?mainPts%1===0?mainPts:mainPts.toFixed(1):'0'}</td><td class="${ptsColor(wp)}">${wp>0?wp%1===0?wp:wp.toFixed(1):'0'}</td>${cells}</tr>`;
   }).join('');
   updateCABanner();
 }
@@ -1344,6 +1350,7 @@ function confirmClear() {
 // corrective-action form pre-filled from the occurrence history. "Record in
 // tracker" drops the 1st/2nd/Final/Terminated marker on the form date, which
 // resets their write-up points and clears them from the banner.
+const CA_FOLDER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 const CA_CONFIG = { company: 'The Travel Agency: Soho', supervisor: 'Jennifer Bartholomeo', location: 'Soho', title: 'Budtender', emailTo: 'Melissa' };
 // First names of supervisors; anyone else defaults to CA_CONFIG.title
 const CA_SUPERVISORS = ['tamika', 'joseph', 'joshua', 'miguel', 'owen', 'mic'];
@@ -1641,22 +1648,17 @@ function caSyncAlerts() {
 function updateCABanner() {
   const el = document.getElementById('caBanner'); if (!el) return;
   caSyncAlerts();
-  const keys = caPendingKeys().sort((a,b)=>(attendanceData[a].displayName||a).localeCompare(attendanceData[b].displayName||b));
   const jp = caJunkPlan();
-  const junk = (jp.remove.length || jp.strip.length) ? `<span style="display:inline-flex;gap:8px;align-items:center;margin-right:16px"><strong>&#9888; Duplicate leftover rows found (${jp.remove.length}).</strong><button class="ca-chip" onclick="cleanupIdImport()">Review &amp; remove</button></span>` : '';
-  if (!keys.length && !junk) { el.classList.remove('active'); el.innerHTML = ''; return; }
+  if (!jp.remove.length && !jp.strip.length) { el.classList.remove('active'); el.innerHTML = ''; return; }
   el.classList.add('active');
-  el.innerHTML = junk + (keys.length ? '<strong>&#9888; Corrective action needed:</strong>' : '') + keys.map(k => {
-    const p = attendanceData[k], nm = splitName(p.displayName || k);
-    const st = CA_STAGES[caNextStage(p.dates || {})].label;
-    return `<button class="ca-chip" data-key="${escHtml(k)}" onclick="openCA(this.dataset.key)">${escHtml(nm.fn + ' ' + nm.ln)} &middot; ${fmtPts(caCurrentPts(p.dates||{}))} pts &middot; ${st}</button>`;
-  }).join('');
+  const what = jp.remove.length ? `Duplicate leftover rows found (${jp.remove.length}).` : 'Leftover employee ID import data found.';
+  el.innerHTML = `<strong>&#9888; ${what}</strong><button class="ca-chip" onclick="cleanupIdImport()">Review &amp; remove</button>`;
 }
 function caAutoPrompt(before) {
   const fresh = caPendingKeys().filter(k => !before.includes(k));
   if (!fresh.length) return;
   openCA(fresh[0]);
-  if (fresh.length > 1) toast((fresh.length - 1) + ' more budtender(s) also need a corrective action (see banner)', 'error');
+  if (fresh.length > 1) toast((fresh.length - 1) + ' more budtender(s) also need a corrective action (look for the folder icon)', 'error');
 }
 
 // ── Form ──
