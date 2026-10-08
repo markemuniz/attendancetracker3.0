@@ -1345,6 +1345,9 @@ function confirmClear() {
 // tracker" drops the 1st/2nd/Final/Terminated marker on the form date, which
 // resets their write-up points and clears them from the banner.
 const CA_CONFIG = { company: 'The Travel Agency: Soho', supervisor: 'Jennifer Bartholomeo', location: 'Soho', title: 'Budtender', emailTo: 'Melissa' };
+// First names of supervisors; anyone else defaults to CA_CONFIG.title
+const CA_SUPERVISORS = ['tamika', 'joseph', 'joshua', 'miguel', 'owen', 'mic'];
+function caTitleFor(fn) { return CA_SUPERVISORS.includes((fn || '').trim().split(/\s+/)[0].toLowerCase()) ? 'Supervisor' : CA_CONFIG.title; }
 const CA_THRESHOLD = 3;
 const CA_STAGES = {
   first:       { label: 'First Warning',  marker: '1st' },
@@ -1592,7 +1595,7 @@ function caAlertContent(k) {
     const d = {
       first: nm.fn, last: nm.ln, stage, date: todayYMD(),
       empId: findEmployeeId(nm.fn, nm.ln) || caRowId(p) || findRowEmployeeId(nm.fn, nm.ln) || '',
-      title: CA_CONFIG.title, supervisor: CA_CONFIG.supervisor, location: CA_CONFIG.location,
+      title: caTitleFor(nm.fn), supervisor: CA_CONFIG.supervisor, location: CA_CONFIG.location,
       sickRemaining: getSickHoursRemaining(dates),
       occurrences: caGetOccurrences(p),
       prior: stage === 'first' ? [] : caGetPriorCycles(p)
@@ -1802,7 +1805,7 @@ function openCA(key) {
   const id = findEmployeeId(nm.fn, nm.ln) || caRowId(p) || findRowEmployeeId(nm.fn, nm.ln);
   document.getElementById('caEmpId').value = id;
   document.getElementById('caEmpId').placeholder = Object.keys(employees).length ? 'Not found in employee list' : 'Import employee ID list first';
-  document.getElementById('caTitle').value = CA_CONFIG.title;
+  document.getElementById('caTitle').value = caTitleFor(nm.fn);
   document.getElementById('caSupervisor').value = CA_CONFIG.supervisor;
   document.getElementById('caLocation').value = CA_CONFIG.location;
   document.getElementById('caEmailTo').value = CA_CONFIG.emailTo;
