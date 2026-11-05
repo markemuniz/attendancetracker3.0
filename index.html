@@ -1558,12 +1558,13 @@ function caGetOccurrences(person) {
   let lastWU = null;
   if (hasWU) Object.entries(dates).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([d,v]) => { if (['1st','2nd','final','terminated','term','completed'].includes((v||'').toString().trim().toLowerCase())) lastWU = d; });
   const today = new Date(); today.setHours(0,0,0,0);
-  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - 90);
+  const sixMo = new Date(today); sixMo.setMonth(sixMo.getMonth() - 6);
   const out = [];
   Object.entries(dates).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([d,v]) => {
     const pts = getPoints(v); if (!pts) return;
-    if (hasWU) { if (d <= lastWU) return; }
-    else { const ed = parseDate(d); if (!ed) return; ed.setHours(0,0,0,0); if (ed < cutoff || ed > today) return; }
+    if (hasWU && d <= lastWU) return;   // only occurrences since the last write-up
+    const ed = parseDate(d); if (!ed) return; ed.setHours(0,0,0,0);
+    if (ed < sixMo || ed > today) return; // nothing older than 6 months
     out.push({ date: d, pts, label: caOccurrenceLabel(pts, notes[d] || '') });
   });
   return out;
@@ -1719,7 +1720,7 @@ function caSyncAlerts() {
       const ca = caAlertContent(k);
       return emailjs.send(CA_EMAIL.serviceId, CA_EMAIL.templateId, {
         employee_name: (nm.fn + ' ' + nm.ln).trim(),
-        points: fmtPts(caCurrentPts(p.dates || {})),
+        points: fmtPts(caGetOccurrences(p).reduce((a, o) => a + o.pts, 0)),
         next_stage: CA_STAGES[caNextStage(p.dates || {})].label,
         ca_email: ca.email,
         ca_form_html: ca.form
