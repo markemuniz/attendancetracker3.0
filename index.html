@@ -168,6 +168,17 @@
   .import-log-entry .log-when{color:var(--text-muted);font-size:0.72rem;white-space:nowrap}
   .import-log-entry .log-del{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.75rem;padding:2px;line-height:1}
   .import-log-entry .log-del:hover{color:var(--red)}
+  /* Cell change history */
+  tbody td.date-cell.has-hist::before{content:'';position:absolute;top:0;left:0;border-style:solid;border-width:6px 6px 0 0;border-color:var(--accent) transparent transparent transparent;opacity:0.85;pointer-events:none}
+  .cell-hist{margin-top:16px;border-top:1px solid var(--border);padding-top:12px}
+  .cell-hist-list{display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto}
+  .cell-hist-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:baseline;font-size:0.74rem;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 10px}
+  .cell-hist-row .ch-change{color:var(--text);min-width:0;overflow-wrap:anywhere}
+  .cell-hist-row .ch-from{color:var(--text-muted);text-decoration:line-through}
+  .cell-hist-row .ch-to{color:var(--text);font-weight:600}
+  .cell-hist-row .ch-meta{color:var(--text-muted);font-size:0.68rem;white-space:nowrap;text-align:right}
+  .cell-hist-row .ch-who{color:var(--accent);font-weight:600}
+  .cell-hist-empty{color:var(--text-muted);font-size:0.74rem}
   .history-count{display:inline-block;margin-left:6px;padding:0 6px;border-radius:9px;background:var(--surface2);color:var(--text-muted);font-size:0.68rem;line-height:16px}
   /* Corrective action */
   .ca-banner{display:none;align-items:center;gap:10px;padding:8px 24px;background:rgba(255,107,122,0.08);border-bottom:1px solid rgba(255,107,122,0.3);font-size:0.78rem;color:var(--red);flex-shrink:0;flex-wrap:wrap}
@@ -313,6 +324,10 @@
       </div>
       <textarea id="userNoteInput" class="note-input" placeholder="Add a note about this day (optional)"></textarea>
     </div>
+    <div class="cell-hist" id="cellHistBox">
+      <div class="note-label" style="margin-bottom:8px">&#128337; Change History</div>
+      <div class="cell-hist-list" id="cellHistList"></div>
+    </div>
     <div class="modal-actions" style="justify-content:space-between">
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="toggleHidePerson()" id="hidePersonBtn" style="font-size:0.72rem">Hide Budtender</button>
@@ -418,6 +433,7 @@ const importLogRef = firebase.database().ref('importLog');
 const manualDatesRef = firebase.database().ref('manualDates');
 const employeesRef = firebase.database().ref('employees');
 const caAlertsRef = firebase.database().ref('caAlertsSent');
+const cellHistoryRef = firebase.database().ref('cellHistory');
 
 let currentUserEmail = '';
 
@@ -466,6 +482,7 @@ function showApp() {
   loadManualDates();
   loadEmployees();
   loadCAAlerts();
+  loadCellHistory();
 }
 auth.onAuthStateChanged(user => {
   if (user) {
@@ -587,9 +604,74 @@ function confirmAddDate() {
 }
 // ───────────────────────────────────────────────────────────────
 
+// ── Cell change history (who changed what, when) ──────────────
+// cellHistory/{personKey}/{dateKey}/{pushId} = { who, ts, field, from, to, via }
+// Every saveData() diffs against the last copy synced from Firebase, so edits,
+// imports, undo, clear, deletes and corrective actions are all captured.
+let lastSyncedData = null;
+let cellHistory = {};
+function loadCellHistory() {
+  cellHistoryRef.on('value', snap => {
+    cellHistory = snap.val() || {};
+    renderTable();
+    if (editingPerson && editingDate) renderCellHistory(editingPerson, editingDate);
+  }, err => console.warn('Cell history load failed:', err.message));
+}
+function histSafeKey(k) { return String(k).replace(/[.#$\[\]\/]/g, '_'); }
+function logCellChanges(via) {
+  if (!lastSyncedData) return;
+  const who = (currentUserEmail || '').split('@')[0] || 'unknown';
+  const ts = Date.now(), updates = {};
+  const keys = new Set([...Object.keys(lastSyncedData), ...Object.keys(attendanceData)]);
+  keys.forEach(pk => {
+    const before = lastSyncedData[pk] || {}, after = attendanceData[pk] || {};
+    [['dates', 'value'], ['userNotes', 'note']].forEach(([bucket, field]) => {
+      const b = before[bucket] || {}, a = after[bucket] || {};
+      new Set([...Object.keys(b), ...Object.keys(a)]).forEach(dk => {
+        const from = b[dk] == null ? '' : String(b[dk]), to = a[dk] == null ? '' : String(a[dk]);
+        if (from === to) return;
+        const id = cellHistoryRef.push().key;
+        updates[histSafeKey(pk) + '/' + histSafeKey(dk) + '/' + id] = { who, ts, field, from, to, via };
+      });
+    });
+  });
+  if (!Object.keys(updates).length) return;
+  // Reflect locally right away so the marker shows before Firebase echoes back
+  Object.entries(updates).forEach(([path, e]) => {
+    const [pk, dk, id] = path.split('/');
+    ((cellHistory[pk] = cellHistory[pk] || {})[dk] = cellHistory[pk][dk] || {})[id] = e;
+  });
+  cellHistoryRef.update(updates).catch(err => console.error('Cell history save failed:', err));
+  lastSyncedData = JSON.parse(JSON.stringify(attendanceData));
+}
+function getCellHistory(pk, dk) {
+  const h = (cellHistory[histSafeKey(pk)] || {})[histSafeKey(dk)] || {};
+  return Object.values(h).filter(e => e && e.ts).sort((a, b) => b.ts - a.ts);
+}
+function fmtHistWhen(ts) {
+  const d = new Date(ts);
+  return (d.getMonth() + 1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2) + ' ' +
+    d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+const HIST_VIA = { import: 'import', undo: 'undo', clear: 'clear all', delete: 'deleted budtender', ca: 'corrective action', cleanup: 'cleanup' };
+function renderCellHistory(pk, dk) {
+  const list = document.getElementById('cellHistList');
+  if (!list) return;
+  const rows = getCellHistory(pk, dk);
+  if (!rows.length) { list.innerHTML = '<div class="cell-hist-empty">No changes recorded yet.</div>'; return; }
+  const show = v => v ? escHtml(v) : '<i>blank</i>';
+  list.innerHTML = rows.map(e => {
+    const label = e.field === 'note' ? 'Note: ' : '';
+    const via = HIST_VIA[e.via] ? ' &#183; ' + HIST_VIA[e.via] : '';
+    return `<div class="cell-hist-row"><span class="ch-change">${label}<span class="ch-from">${show(e.from)}</span> &#8594; <span class="ch-to">${show(e.to)}</span></span><span class="ch-meta"><span class="ch-who">${escHtml(e.who || 'unknown')}</span> &#183; ${fmtHistWhen(e.ts)}${via}</span></div>`;
+  }).join('');
+}
+// ───────────────────────────────────────────────────────────────
+
 function loadData() {
   dataRef.on('value', snap => {
     attendanceData = snap.val() || {};
+    lastSyncedData = JSON.parse(JSON.stringify(attendanceData));
     caDataLoaded = true;
     localStorage.setItem('bt_attendance', JSON.stringify(attendanceData));
     rebuildDates(); renderTable();
@@ -607,7 +689,8 @@ function loadData() {
     }
   });
 }
-function saveData() {
+function saveData(via) {
+  logCellChanges(via || 'edit');
   dataRef.set(attendanceData).catch(err => toast('Save failed: ' + err.message, 'error'));
   localStorage.setItem('bt_attendance', JSON.stringify(attendanceData));
 }
@@ -629,7 +712,7 @@ function updateUndoBtn() {
 function undoLast() {
   if (!undoStack.length) { toast('Nothing to undo', 'error'); return; }
   attendanceData = undoStack.pop();
-  saveData();
+  saveData('undo');
   rebuildDates();
   renderTable();
   updateUndoBtn();
@@ -1005,7 +1088,7 @@ function confirmImport() {
     }
   }
   pendingImportDates = [];
-  saveData();
+  saveData('import');
   rebuildDates();
   renderTable();
   closeImport();
@@ -1249,7 +1332,7 @@ function renderTable() {
     if (periodInfo) {
       cells=filteredPeriods.map(p=>{ const pts=getPeriodPoints(dates,p,periodInfo.keyFn); const display=pts===0?'<span style="color:var(--text-muted)">&#183;</span>':(pts%1===0?pts:pts.toFixed(1)); return `<td class="period-cell ${pts>0?ptsColor(pts):''}">${display}</td>`; }).join('');
     } else {
-      cells=filteredDates.map(d=>{ const v=dates[d]||''; const hasUserNote=!!(userNotes[d]&&userNotes[d].trim()); const starHtml=hasUserNote?'<span class="note-star">&#9733;</span>':''; const titleAttr=hasUserNote?` title="${(userNotes[d]||'').replace(/"/g,'&quot;')}"`:'' ; return `<td class="date-cell" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${starHtml}</td>`; }).join('');
+      cells=filteredDates.map(d=>{ const v=dates[d]||''; const hasUserNote=!!(userNotes[d]&&userNotes[d].trim()); const starHtml=hasUserNote?'<span class="note-star">&#9733;</span>':''; const titleAttr=hasUserNote?` title="${(userNotes[d]||'').replace(/"/g,'&quot;')}"`:'' ; const histCls=getCellHistory(key,d).length?' has-hist':''; return `<td class="date-cell${histCls}" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${starHtml}</td>`; }).join('');
     }
     const sickRemaining=getSickHoursRemaining(dates);
     const sickCls=sickRemaining<=0?'sick-empty':(sickRemaining<=8?'sick-low':'');
@@ -1273,6 +1356,7 @@ function openEdit(pk,dt) {
   if (note) { noteEl.textContent=note; noteEl.style.display='block'; } else { noteEl.style.display='none'; }
   document.getElementById('userNoteInput').value=(p&&p.userNotes&&p.userNotes[dt])?p.userNotes[dt]:'';
   document.getElementById('hidePersonBtn').textContent=(p&&p.hidden)?'Unhide Budtender':'Hide Budtender';
+  renderCellHistory(pk, dt);
   document.getElementById('editModal').classList.add('active');
   updateSickPreview();
   setTimeout(()=>input.focus(),100);
@@ -1325,7 +1409,7 @@ function deletePerson() {
   if (!confirm('Delete '+name+' and all their attendance data?')) return;
   pushUndo();
   delete attendanceData[editingPerson];
-  saveData(); rebuildDates(); renderTable(); closeEdit();
+  saveData('delete'); rebuildDates(); renderTable(); closeEdit();
   toast(name+' deleted','success');
 }
 function exportCSV() {
@@ -1347,7 +1431,7 @@ function confirmClear() {
   if (!confirm('Clear ALL attendance data? Cannot be undone.')) return;
   if (!confirm('Are you sure?')) return;
   pushUndo();
-  attendanceData={}; saveData(); rebuildDates(); renderTable(); toast('All data cleared','success');
+  attendanceData={}; saveData('clear'); rebuildDates(); renderTable(); toast('All data cleared','success');
 }
 // ── Corrective Action (auto-generated at 3 points) ───────────────────────────
 // Anyone whose current points (same number that turns the name red: points since
@@ -1566,7 +1650,7 @@ function cleanupIdImport() {
   pushUndo();
   Object.values(attendanceData).forEach(p => { if (p.dates) delete p.dates[JUNK_DATE_KEY]; });
   plan.remove.forEach(k => delete attendanceData[k]);
-  saveData(); rebuildDates(); renderTable();
+  saveData('cleanup'); rebuildDates(); renderTable();
   toast('Removed ' + names.length + ' duplicate rows', 'success');
 }
 
@@ -1846,7 +1930,7 @@ function caRecord() {
   pushUndo();
   dates[d.date] = marker;
   const name = splitName(p.displayName || caPerson).fn;
-  saveData(); rebuildDates(); renderTable(); closeCA();
+  saveData('ca'); rebuildDates(); renderTable(); closeCA();
   toast(marker + ' recorded for ' + name, 'success');
 }
 // ───────────────────────────────────────────────────────────────
