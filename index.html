@@ -106,7 +106,7 @@
   .pf-status.ok{border-color:rgba(74,222,128,0.35);color:#4ade80}
   .pf-status.warn{border-color:rgba(245,158,11,0.4);color:#f59e0b}
   .pf-status.bad{border-color:rgba(239,68,68,0.4);color:#ef4444}
-  .pf-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+  .pf-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
   .pf-stat{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
   .pf-stat .v{font-size:1.1rem;font-weight:700}
   .pf-stat .l{font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em}
@@ -300,6 +300,7 @@
 
 <div class="dropdown-menu" id="ptsColMenu" style="position:fixed;z-index:100">
   <div class="dropdown-item selected" data-mode="annual" onclick="setPtsMode('annual')">Annual Pts</div>
+  <div class="dropdown-item" data-mode="6months" onclick="setPtsMode('6months')">Last 6 Months</div>
   <div class="dropdown-item" data-mode="90days" onclick="setPtsMode('90days')">Last 90 Days</div>
 </div>
 
@@ -1219,6 +1220,16 @@ function parseDate(dateStr) {
   if (slash) { let [,m,d,y]=slash; y=y.length===2?'20'+y:y; const dt=new Date(parseInt(y),parseInt(m)-1,parseInt(d)); return isNaN(dt)?null:dt; }
   const d=new Date(s); return isNaN(d)?null:d;
 }
+function getLast6MoPts(dates) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const cutoff = new Date(today); cutoff.setMonth(cutoff.getMonth() - 6);
+  let pts = 0;
+  Object.entries(dates).forEach(([d,v]) => {
+    const ed = parseDate(d); if (!ed) return; ed.setHours(0,0,0,0);
+    if (ed >= cutoff && ed <= today) pts += getPoints(v);
+  });
+  return pts;
+}
 function getLast90Pts(dates) {
   const today = new Date(); today.setHours(0,0,0,0);
   const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - 90);
@@ -1328,7 +1339,7 @@ function renderTable() {
   document.getElementById('emptyState').style.display='none';
   document.getElementById('mainTable').style.display='';
   const periodInfo=buildPeriods();
-  const ptsLabel=ptsMode==='90days'?'Last 90 Days':'Annual Pts';
+  const ptsLabel=ptsMode==='90days'?'Last 90 Days':ptsMode==='6months'?'Last 6 Months':'Annual Pts';
   const filteredDates=monthFilter==='all'?allDates:allDates.filter(d=>d.substring(0,7)===monthFilter);
   let filteredPeriods=null;
   if (periodInfo) {
@@ -1353,7 +1364,7 @@ function renderTable() {
     if (name.includes(',')) { const parts=name.split(',').map(s=>s.trim()); ln=parts[0]; fn=parts[1]||''; }
     else { const parts=name.split(' ').map(s=>s.trim()).filter(Boolean); if (parts.length>=2) { fn=parts[0]; ln=parts.slice(1).join(' '); } else { fn=parts[0]||name; ln=''; } }
     const dates=person.dates||{}, userNotes=person.userNotes||{};
-    const mainPts=ptsMode==='90days'?getLast90Pts(dates):getAnnualPts(dates);
+    const mainPts=ptsMode==='90days'?getLast90Pts(dates):ptsMode==='6months'?getLast6MoPts(dates):getAnnualPts(dates);
     const wp=getWriteupPts(dates);
     if (!showHidden&&person.hidden) return '';
     const termed=isTerminated(dates), nc=getNameColor(dates,termed), wuTag=getWriteupTagHtml(dates);
@@ -1446,13 +1457,13 @@ function deletePerson() {
 function exportCSV() {
   if (!Object.keys(attendanceData).length) { toast('No data','error'); return; }
   rebuildDates();
-  let csv='First Name,Last Name,Annual Pts,Last 90 Days,Write-Up Pts,Sick Hrs Remaining,'+allDates.map(d=>fmtDate(d)).join(',')+'\n';
+  let csv='First Name,Last Name,Annual Pts,Last 6 Months,Last 90 Days,Write-Up Pts,Sick Hrs Remaining,'+allDates.map(d=>fmtDate(d)).join(',')+'\n';
   Object.entries(attendanceData).sort((a,b)=>(a[1].displayName||a[0]).localeCompare(b[1].displayName||b[0])).forEach(([k,p])=>{
     const name=p.displayName||k; let fn='',ln='';
     if (name.includes(',')) { const pts=name.split(',').map(s=>s.trim()); ln=pts[0]; fn=pts[1]||''; }
     else { const pts=name.split(' ').filter(Boolean); fn=pts[0]||''; ln=pts.slice(1).join(' '); }
-    const dates=p.dates||{}, ap=getAnnualPts(dates), l90=getLast90Pts(dates), wp=getWriteupPts(dates), sr=getSickHoursRemaining(dates);
-    csv+=`"${fn}","${ln}",${ap},${l90},${wp},${sr},${allDates.map(d=>dates[d]||'').join(',')}\n`;
+    const dates=p.dates||{}, ap=getAnnualPts(dates), l6=getLast6MoPts(dates), l90=getLast90Pts(dates), wp=getWriteupPts(dates), sr=getSickHoursRemaining(dates);
+    csv+=`"${fn}","${ln}",${ap},${l6},${l90},${wp},${sr},${allDates.map(d=>dates[d]||'').join(',')}\n`;
   });
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download=`attendance_${new Date().toISOString().split('T')[0]}.csv`; a.click();
@@ -1982,11 +1993,11 @@ function openProfile(key) {
   document.getElementById('pfTitle').textContent = emp.positions || caTitleFor(nm.fn, nm.ln);
   const st = document.getElementById('pfStatus'); st.className = 'pf-status ' + cls; st.textContent = msg;
   const stat = (v, l, c) => `<div class="pf-stat"><div class="v ${c || ''}">${v}</div><div class="l">${l}</div></div>`;
-  const ann = getAnnualPts(dates), l90 = getLast90Pts(dates), wp = getWriteupPts(dates);
+  const ann = getAnnualPts(dates), l6 = getLast6MoPts(dates), l90 = getLast90Pts(dates), wp = getWriteupPts(dates);
   document.getElementById('pfStats').innerHTML =
-    stat(fmtPts(ann), 'Annual pts', ptsColor(ann)) + stat(fmtPts(l90), 'Last 90 days', ptsColor(l90)) +
+    stat(fmtPts(ann), 'Annual pts', ptsColor(ann)) + stat(fmtPts(l6), 'Last 6 months', ptsColor(l6)) + stat(fmtPts(l90), 'Last 90 days', ptsColor(l90)) +
     stat(wu ? fmtPts(wp) : '&ndash;', 'Since last write-up', wu ? ptsColor(wp) : '') +
-    stat(fmtSickRemaining(getSickHoursRemaining(dates)), 'NYC-PS&amp;STO hrs left');
+    stat(fmtSickRemaining(getSickHoursRemaining(dates)), 'NYC-PS&amp;STO hrs left') + stat(fmtPts(curPts) + ' / ' + CA_THRESHOLD, 'Toward next CA', ptsColor(curPts));
   const miss = '<span class="missing">Not on file</span>';
   const row = (k, v) => `<div class="k">${k}</div><div>${v}</div>`;
   document.getElementById('pfRows').innerHTML =
