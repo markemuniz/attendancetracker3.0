@@ -266,6 +266,34 @@
   .sb-pos{color:var(--text-muted);font-weight:400;font-size:0.7rem;margin-left:4px}
   .sb-sub{color:var(--text-dim);font-size:0.74rem;margin-top:1px}
   .pf-sub{font-size:0.66rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin:0 0 6px}
+  /* Profile attendance calendar */
+  #profileModal .modal{width:640px}
+  #pfSched{margin-bottom:16px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px}
+  .pf-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .pf-cal-nav{display:flex;gap:6px}
+  .pf-cal-nav .btn{padding:2px 10px;font-size:0.85rem;line-height:1.2}
+  .pf-cal-months{display:flex;gap:16px;flex-wrap:wrap}
+  .pf-cal-month{flex:1 1 160px;min-width:160px}
+  .pf-cal-title{font-size:0.74rem;font-weight:700;color:var(--text);margin-bottom:6px;text-align:center}
+  .pf-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .pf-cal-dow{font-size:0.56rem;color:var(--text-muted);text-align:center;font-weight:700;padding-bottom:2px}
+  .pf-cal-day{aspect-ratio:1;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:0.64rem;font-weight:600;color:var(--text-muted);background:var(--surface3);position:relative;cursor:default}
+  .pf-cal-day.empty{background:none}
+  .pf-cal-day.cal-future{opacity:0.45}
+  .pf-cal-day.cal-today{box-shadow:0 0 0 1.5px var(--text-dim)}
+  .cal-worked{background:rgba(74,222,128,0.24)!important;color:#4ade80!important}
+  .cal-late{background:rgba(245,158,11,0.3)!important;color:#fbbf24!important}
+  .cal-absent{background:rgba(255,107,122,0.32)!important;color:#ff8a96!important}
+  .cal-noin{background:var(--surface3);box-shadow:inset 0 0 0 1.5px rgba(255,107,122,0.75)!important;color:#ff8a96!important}
+  .cal-excused{background:rgba(108,140,255,0.3)!important;color:#9fb2ff!important}
+  .cal-sick{background:rgba(56,189,248,0.28)!important;color:#7dd3fc!important}
+  .cal-sched{background:var(--surface3);box-shadow:inset 0 0 0 1px rgba(74,222,128,0.55);color:#4ade80!important}
+  .pf-cal-day.cal-wu::after{content:'';position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:#facc15}
+  .pf-cal-summary{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:0.74rem;color:var(--text)}
+  .pf-cal-count i,.pf-cal-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .pf-cal-legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:0.66rem;color:var(--text-muted);align-items:center}
+  .pf-cal-legend .cal-wu-key{width:6px;height:6px;border-radius:50%;background:#facc15;vertical-align:1px}
+  .pf-cal-hint{flex-basis:100%}
   #schedPreview{display:none;text-align:left;margin-top:12px;max-height:260px;overflow-y:auto;font-size:0.78rem;background:var(--bg);border-radius:8px;padding:12px}
   .sp-file{font-size:0.76rem;color:var(--text-muted);margin-bottom:3px}
   .sp-file.ok{color:var(--green)}
@@ -2451,26 +2479,81 @@ function renderEditSched(pk, ds) {
     `<div class="sb-sub">${escHtml(schedOutcome(r))}</div></div></div>`).join('');
   box.style.display = 'block';
 }
-// Count one person's shifts in a date range
-function schedSummary(pk, from, to) {
-  const c = { sched: 0, worked: 0, late: 0, early: 0, absent: 0, callout: 0, pending: 0, items: [] };
-  const days = (schedData.shifts || {})[pk] || {};
-  Object.keys(days).sort().forEach(ds => {
-    if (ds < from || ds > to) return;
-    const sd = schedDay(pk, ds); if (!sd) return;
-    sd.list.forEach(r => {
-      if (r.status === 'pending') { c.pending++; return; }
-      c.sched++;
-      if (r.status === 'absent') c.absent++;
-      else if (r.status === 'callout') c.callout++;
-      else c.worked++;
-      const late = r.late >= SCHED_GRACE_MIN, early = r.early !== null && r.early !== undefined && r.early >= SCHED_GRACE_MIN;
-      if (late) c.late++;
-      if (early) c.early++;
-      if (late || early || r.status === 'absent' || r.status === 'callout') c.items.push({ ds, r });
-    });
-  });
-  return c;
+// ── Profile attendance calendar (3 months), for walking someone through a corrective action.
+// A day's color comes from the tracker entry first (that's the official record), then
+// from the When I Work schedule for days with no entry.
+let pfCalEnd = null; // 'YYYY-MM' of the last month shown
+const CAL_KINDS = {
+  worked:  { label: 'Worked' },
+  late:    { label: 'Late (0.5)' },
+  absent:  { label: 'Absent (1)' },
+  noin:    { label: 'Scheduled, no clock-in' },
+  excused: { label: 'Excused' },
+  sick:    { label: 'NYC-PS&STO' },
+  sched:   { label: 'Scheduled' }
+};
+function calDay(pk, ds, today) {
+  const p = attendanceData[pk] || {};
+  const v = String(((p.dates || {})[ds]) || '').trim();
+  const sd = schedDay(pk, ds, v);
+  const pts = getPoints(v);
+  let kind = '';
+  if (pts >= 1 || /^nc\s*\/?\s*ns$/i.test(v)) kind = 'absent';
+  else if (pts > 0) kind = 'late';
+  else if (/^excused$/i.test(v)) kind = 'excused';
+  else if (parseSickMinutes(v) !== null) kind = 'sick';
+  else if (sd) {
+    if (sd.worst.status === 'absent') kind = 'noin';
+    else if (ds > today || sd.list.every(r => r.status === 'pending')) kind = 'sched';
+    else kind = 'worked';
+  }
+  const wu = /^(1st|2nd|final|terminated|term)$/i.test(v);
+  const lines = [fmtDateLong(ds) + (kind ? ': ' + (kind === 'sick' ? formatSickLabel(parseSickMinutes(v)) : CAL_KINDS[kind].label) : '')];
+  if (wu) lines.push('Write-up: ' + v);
+  if (sd) sd.list.forEach(r => lines.push('Scheduled ' + schedRangeText(r) + (r.i ? ' · ' + schedOutcome(r) : '')));
+  const note = (p.notes || {})[ds]; if (note) lines.push(note);
+  const un = (p.userNotes || {})[ds]; if (un) lines.push('Note: ' + un);
+  return { kind, wu, tip: lines.join('\n') };
+}
+function pfCalStep(n) {
+  if (!pfCalEnd) return;
+  const [y, m] = pfCalEnd.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1 + n, 1));
+  const next = t.getUTCFullYear() + '-' + pad2(t.getUTCMonth() + 1);
+  if (next > todayYMD().slice(0, 7)) return; // nothing to show past this month
+  pfCalEnd = next; renderPfCal();
+}
+function renderPfCal() {
+  const el = document.getElementById('pfSched');
+  if (!el || !pfPerson || !pfCalEnd) return;
+  const today = todayYMD();
+  const [ey, em] = pfCalEnd.split('-').map(Number);
+  const months = [-2, -1, 0].map(off => { const t = new Date(Date.UTC(ey, em - 1 + off, 1)); return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1 }; });
+  const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const counts = { worked: 0, late: 0, absent: 0, noin: 0, excused: 0, sick: 0 };
+  const monthHtml = months.map(({ y, m }) => {
+    const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    let cells = ['S','M','T','W','T','F','S'].map(d => `<div class="pf-cal-dow">${d}</div>`).join('');
+    for (let i = 0; i < first; i++) cells += '<div class="pf-cal-day empty"></div>';
+    for (let d = 1; d <= days; d++) {
+      const ds = y + '-' + pad2(m) + '-' + pad2(d);
+      const c = calDay(pfPerson, ds, today);
+      if (c.kind && counts[c.kind] !== undefined) counts[c.kind]++;
+      const cls = (c.kind ? ' cal-' + c.kind : '') + (c.wu ? ' cal-wu' : '') + (ds === today ? ' cal-today' : '') + (ds > today ? ' cal-future' : '');
+      cells += `<div class="pf-cal-day${cls}" title="${escHtml(c.tip).replace(/\n/g, '&#10;')}">${d}</div>`;
+    }
+    return `<div class="pf-cal-month"><div class="pf-cal-title">${MN[m - 1]} ${y}</div><div class="pf-cal-grid">${cells}</div></div>`;
+  }).join('');
+  const atEnd = pfCalEnd >= today.slice(0, 7);
+  const chip = (k, n) => `<span class="pf-cal-count"><i class="cal-${k}"></i>${n} ${k === 'sick' ? 'NYC-PS&amp;STO' : escHtml(CAL_KINDS[k].label)}</span>`;
+  const summary = ['worked', 'late', 'absent', 'noin', 'excused', 'sick'].filter(k => counts[k] || ['worked', 'late', 'absent'].includes(k)).map(k => chip(k, counts[k])).join('');
+  el.innerHTML =
+    `<div class="pf-cal-head"><div class="pf-sub" style="margin:0">Attendance, ${MN[months[0].m - 1].slice(0, 3)} – ${MN[months[2].m - 1].slice(0, 3)} ${months[2].y}</div>` +
+    `<div class="pf-cal-nav"><button class="btn" onclick="pfCalStep(-1)" aria-label="Earlier months">&#8249;</button><button class="btn" onclick="pfCalStep(1)" aria-label="Later months"${atEnd ? ' disabled style="opacity:0.35;cursor:default"' : ''}>&#8250;</button></div></div>` +
+    `<div class="pf-cal-months">${monthHtml}</div>` +
+    `<div class="pf-cal-summary">${summary}</div>` +
+    `<div class="pf-cal-legend"><span><i class="cal-sched"></i>Scheduled (upcoming)</span><span><i class="cal-wu-key"></i>Write-up</span><span class="pf-cal-hint">Green days come from the When I Work schedule import. Hover a day for details.</span></div>`;
+  el.style.display = 'block';
 }
 
 // ── Import preview: what the files show before anything is saved
@@ -2553,16 +2636,9 @@ function openProfile(key) {
     stat(fmtPts(ann), 'Annual pts', ptsColor(ann)) + stat(fmtPts(l6), 'Last 6 months', ptsColor(l6)) + stat(fmtPts(l90), 'Last 90 days', ptsColor(l90)) +
     stat(wu ? fmtPts(wp) : '&ndash;', 'Since last write-up', wu ? ptsColor(wp) : '') +
     stat(fmtSickRemaining(getSickHoursRemaining(dates)), 'NYC-PS&amp;STO hrs left') + stat(fmtPts(curPts) + ' / ' + CA_THRESHOLD, 'Toward next CA', ptsColor(curPts));
-  // Scheduled vs. worked, last 30 days (When I Work Shifts + Timesheets)
-  const pfS = document.getElementById('pfSched');
-  const sc = schedSummary(key, ymdAdd(todayYMD(), -29), todayYMD());
-  if (sc.sched + sc.pending > 0) {
-    const n = (v, bad) => v ? `<span class="${bad}">${v}</span>` : '<span class="sc-zero">0</span>';
-    pfS.innerHTML = '<div class="pf-sub">Schedule, last 30 days</div><div class="pf-stats">' +
-      stat(sc.sched, 'Shifts scheduled') + stat(n(sc.worked, 'pts-green'), 'Worked') + stat(n(sc.absent, 'pts-red'), 'Absent (no clock-in)') +
-      stat(n(sc.late, 'pts-orange'), 'Late 8+ min') + stat(n(sc.early, 'pts-orange'), 'Left early 8+ min') + stat(n(sc.callout, 'val-sick'), 'Called out') + '</div>';
-    pfS.style.display = 'block';
-  } else { pfS.innerHTML = ''; pfS.style.display = 'none'; }
+  // Attendance calendar: the current month and the two before it
+  pfCalEnd = todayYMD().slice(0, 7);
+  renderPfCal();
   const miss = '<span class="missing">Not on file</span>';
   const row = (k, v) => `<div class="k">${k}</div><div>${v}</div>`;
   document.getElementById('pfRows').innerHTML =
