@@ -726,9 +726,33 @@ function loadData() {
     }
   });
 }
+// Build a Firebase multi-path update holding only what changed between two
+// copies of the data. Removed keys become null (Firebase deletes them).
+function diffForFirebase(before, after, base, out) {
+  out = out || {}; base = base || '';
+  const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const norm = v => (isObj(v) && !Object.keys(v).length) ? undefined : v; // Firebase drops empty objects
+  new Set([...Object.keys(before || {}), ...Object.keys(after || {})]).forEach(k => {
+    const b = norm(before ? before[k] : undefined), a = norm(after ? after[k] : undefined);
+    const path = base + k;
+    if (isObj(b) && isObj(a)) { diffForFirebase(b, a, path + '/', out); return; }
+    if (JSON.stringify(b) === JSON.stringify(a)) return;
+    out[path] = a === undefined ? null : a;
+  });
+  return out;
+}
 function saveData(via) {
+  // Save only the changed cells so two people editing at once can't wipe
+  // out each other's work. Full overwrite only if Firebase never loaded.
+  let changes = lastSyncedData ? diffForFirebase(lastSyncedData, attendanceData) : null;
+  if (changes && Object.keys(changes).some(p => /[.#$\[\]]/.test(p))) changes = null; // key Firebase can't path into
   logCellChanges(via || 'edit');
-  dataRef.set(attendanceData).catch(err => toast('Save failed: ' + err.message, 'error'));
+  if (changes === null) {
+    dataRef.set(attendanceData).catch(err => toast('Save failed: ' + err.message, 'error'));
+  } else if (Object.keys(changes).length) {
+    dataRef.update(changes).catch(err => toast('Save failed: ' + err.message, 'error'));
+  }
+  lastSyncedData = JSON.parse(JSON.stringify(attendanceData));
   localStorage.setItem('bt_attendance', JSON.stringify(attendanceData));
 }
 function pushUndo() {
