@@ -100,6 +100,20 @@
   tbody tr:hover td:nth-child(1),tbody tr:hover td:nth-child(2),tbody tr:hover td:nth-child(3),tbody tr:hover td:nth-child(4){background:var(--surface)}
   .note-star{position:absolute;top:2px;right:3px;font-size:0.6rem;color:#facc15;line-height:1;pointer-events:none;filter:drop-shadow(0 0 2px rgba(250,204,21,0.4))}
   .name-badge{display:inline-block;padding:3px 10px;border-radius:5px;font-size:0.75rem;font-weight:600;border:1px solid}
+  .name-badge.clickable{cursor:pointer}
+  .name-badge.clickable:hover{filter:brightness(1.25);text-decoration:underline}
+  .pf-status{padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);font-size:0.8rem;margin-bottom:14px}
+  .pf-status.ok{border-color:rgba(74,222,128,0.35);color:#4ade80}
+  .pf-status.warn{border-color:rgba(245,158,11,0.4);color:#f59e0b}
+  .pf-status.bad{border-color:rgba(239,68,68,0.4);color:#ef4444}
+  .pf-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+  .pf-stat{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+  .pf-stat .v{font-size:1.1rem;font-weight:700}
+  .pf-stat .l{font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em}
+  .pf-rows{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;font-size:0.82rem}
+  .pf-rows .k{color:var(--text-muted)}
+  .pf-rows a{color:var(--accent);text-decoration:none}
+  .pf-rows .missing{color:var(--text-muted);font-style:italic}
   .name-green{color:#4ade80;border-color:rgba(74,222,128,0.35);background:rgba(74,222,128,0.08)}
   .name-orange{color:#f59e0b;border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.08)}
   .name-red{color:#ff6b7a;border-color:rgba(255,107,122,0.35);background:rgba(255,107,122,0.08)}
@@ -377,6 +391,20 @@
     <div class="modal-actions">
       <button class="btn" onclick="closeAddDate()">Cancel</button>
       <button class="btn primary" onclick="confirmAddDate()">Add Date</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="profileModal" onclick="if(event.target===this)closeProfile()">
+  <div class="modal">
+    <h3 id="pfName"></h3>
+    <p class="subtitle" id="pfTitle"></p>
+    <div class="pf-status" id="pfStatus"></div>
+    <div class="pf-stats" id="pfStats"></div>
+    <div class="pf-rows" id="pfRows"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+      <button class="btn primary" id="pfCABtn" onclick="profileOpenCA()" style="display:none">Open Corrective Action</button>
+      <button class="btn" onclick="closeProfile()">Close</button>
     </div>
   </div>
 </div>
@@ -1339,7 +1367,8 @@ function renderTable() {
     const sickRemaining=getSickHoursRemaining(dates);
     const sickCls=sickRemaining<=0?'sick-empty':(sickRemaining<=8?'sick-low':'');
     const sickBadge=`<span class="sick-badge ${sickCls}" title="Unpaid sick hours remaining (32/yr)">${fmtSickRemaining(sickRemaining)}</span>`;
-    return `<tr><td>${sickBadge}<span class="name-badge ${nc}">${fn}</span></td><td><span class="name-badge ${nc}">${ln}</span>${wuTag}${caFolder}</td><td class="${ptsColor(mainPts)}">${mainPts>0?mainPts%1===0?mainPts:mainPts.toFixed(1):'0'}</td><td class="${ptsColor(wp)}">${wp>0?wp%1===0?wp:wp.toFixed(1):'0'}</td>${cells}</tr>`;
+    const pfAttr=`data-key="${escHtml(key)}" onclick="openProfile(this.dataset.key)" title="View profile"`;
+    return `<tr><td>${sickBadge}<span class="name-badge clickable ${nc}" ${pfAttr}>${fn}</span></td><td><span class="name-badge clickable ${nc}" ${pfAttr}>${ln}</span>${wuTag}${caFolder}</td><td class="${ptsColor(mainPts)}">${mainPts>0?mainPts%1===0?mainPts:mainPts.toFixed(1):'0'}</td><td class="${ptsColor(wp)}">${wp>0?wp%1===0?wp:wp.toFixed(1):'0'}</td>${cells}</tr>`;
   }).join('');
   updateCABanner();
 }
@@ -1445,7 +1474,12 @@ const CA_FOLDER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 const CA_CONFIG = { company: 'The Travel Agency: Soho', supervisor: 'Jennifer Bartholomeo', location: 'Soho', title: 'Budtender', emailTo: 'Melissa' };
 // First names of supervisors; anyone else defaults to CA_CONFIG.title
 const CA_SUPERVISORS = ['tamika', 'joseph', 'joshua', 'miguel', 'owen', 'mic', 'marcellus'];
-function caTitleFor(fn) { return CA_SUPERVISORS.includes((fn || '').trim().split(/\s+/)[0].toLowerCase()) ? 'Supervisor' : CA_CONFIG.title; }
+function caTitleFor(fn, ln) {
+  const e = ln !== undefined ? findEmployee(fn, ln) : null;
+  if (e && e.positions) return /supervisor/i.test(e.positions) ? 'Supervisor' : CA_CONFIG.title;
+  return caTitleForName(fn);
+}
+function caTitleForName(fn) { return CA_SUPERVISORS.includes((fn || '').trim().split(/\s+/)[0].toLowerCase()) ? 'Supervisor' : CA_CONFIG.title; }
 const CA_THRESHOLD = 3;
 const CA_STAGES = {
   first:       { label: 'First Warning',  marker: '1st' },
@@ -1480,19 +1514,26 @@ function parseEmployeeList(rows, cols) {
   const fnCol = cols.find(c => /first.?name/i.test(c));
   const lnCol = cols.find(c => /last.?name/i.test(c));
   const idCol = cols.find(c => /employee.?(id|number|no)/i.test(c));
+  const emailCol = cols.find(c => /e-?mail/i.test(c));
+  const phoneCol = cols.find(c => /phone|mobile|cell/i.test(c));
+  const posCol = cols.find(c => /position|job.?title|role/i.test(c));
   const map = {};
   rows.forEach(r => {
     const fn = (r[fnCol] || '').toString().trim(), ln = (r[lnCol] || '').toString().trim();
     const id = (r[idCol] === 0 ? '0' : (r[idCol] || '')).toString().trim();
     if (!fn || !ln || !id) return;
-    map[empKey(fn, ln)] = { first: fn, last: ln, id };
+    const e = { first: fn, last: ln, id };
+    const em = emailCol ? (r[emailCol] || '').toString().trim() : ''; if (em) e.email = em;
+    const ph = phoneCol ? (r[phoneCol] || '').toString().trim() : ''; if (ph) e.phone = ph;
+    const ps = posCol ? (r[posCol] || '').toString().trim() : ''; if (ps) e.positions = ps;
+    map[empKey(fn, ln)] = e;
   });
   const n = Object.keys(map).length;
   if (!n) { toast('No employees with an ID found in this file', 'error'); return; }
   pendingEmployees = map;
   pendingImport = null;
   const p = document.getElementById('importPreview');
-  p.innerHTML = `<p style="margin-bottom:8px"><strong>${n}</strong> employee IDs (used to fill corrective action forms)</p>
+  p.innerHTML = `<p style="margin-bottom:8px"><strong>${n}</strong> employees (ID, email, phone; used for profiles and corrective action forms)</p>
     <table><thead><tr><th>Name</th><th>ID</th></tr></thead><tbody>
     ${Object.values(map).slice(0,15).map(e => `<tr><td>${escHtml(e.first)} ${escHtml(e.last)}</td><td>${escHtml(e.id)}</td></tr>`).join('')}
     ${n>15?`<tr><td colspan="2" style="color:var(--text-muted)">...+${n-15} more</td></tr>`:''}
@@ -1507,7 +1548,7 @@ function confirmEmployeeImport() {
   employeesRef.set(map).catch(err => toast('Employee list save failed: ' + err.message, 'error'));
   closeImport();
   renderTable();
-  toast('Saved ' + Object.keys(map).length + ' employee IDs', 'success');
+  toast('Saved ' + Object.keys(map).length + ' employees', 'success');
 }
 // Older versions imported the ID file as attendance, leaving each ID in the person's row
 // under an "Employee ID" pseudo-date. Read the ID from there when the employee list has none.
@@ -1527,6 +1568,13 @@ function findRowEmployeeId(fn, ln) {
     if (id) return id;
   }
   return '';
+}
+function findEmployee(fn, ln) {
+  const exact = employees[empKey(fn, ln)];
+  if (exact) return exact;
+  const f = (fn || '').toLowerCase(), l = (ln || '').toLowerCase();
+  const hits = Object.values(employees).filter(e => (e.last || '').toLowerCase() === l && f && (e.first || '').toLowerCase() && ((e.first.toLowerCase().startsWith(f)) || f.startsWith(e.first.toLowerCase())));
+  return hits.length === 1 ? hits[0] : null;
 }
 function findEmployeeId(fn, ln) {
   const exact = employees[empKey(fn, ln)];
@@ -1695,7 +1743,7 @@ function caAlertContent(k) {
     const d = {
       first: nm.fn, last: nm.ln, stage, date: todayYMD(),
       empId: findEmployeeId(nm.fn, nm.ln) || caRowId(p) || findRowEmployeeId(nm.fn, nm.ln) || '',
-      title: caTitleFor(nm.fn), supervisor: CA_CONFIG.supervisor, location: CA_CONFIG.location,
+      title: caTitleFor(nm.fn, nm.ln), supervisor: CA_CONFIG.supervisor, location: CA_CONFIG.location,
       sickRemaining: getSickHoursRemaining(dates),
       occurrences: caGetOccurrences(p),
       prior: stage === 'first' ? [] : caGetPriorCycles(p)
@@ -1901,7 +1949,7 @@ function openCA(key) {
   const id = findEmployeeId(nm.fn, nm.ln) || caRowId(p) || findRowEmployeeId(nm.fn, nm.ln);
   document.getElementById('caEmpId').value = id;
   document.getElementById('caEmpId').placeholder = Object.keys(employees).length ? 'Not found in employee list' : 'Import employee ID list first';
-  document.getElementById('caTitle').value = caTitleFor(nm.fn);
+  document.getElementById('caTitle').value = caTitleFor(nm.fn, nm.ln);
   document.getElementById('caSupervisor').value = CA_CONFIG.supervisor;
   document.getElementById('caLocation').value = CA_CONFIG.location;
   document.getElementById('caEmailTo').value = CA_CONFIG.emailTo;
@@ -1909,6 +1957,47 @@ function openCA(key) {
   document.getElementById('caModal').classList.add('active');
   caRefresh();
 }
+// ── Budtender profile (click a name) ──
+let pfPerson = null;
+function fmtPhone(p) {
+  const d = String(p || '').replace(/\D/g, '');
+  const t = d.length === 11 && d[0] === '1' ? d.slice(1) : d;
+  return t.length === 10 ? `(${t.slice(0,3)}) ${t.slice(3,6)}-${t.slice(6)}` : String(p || '');
+}
+function openProfile(key) {
+  const p = attendanceData[key]; if (!p) return;
+  pfPerson = key;
+  const dates = p.dates || {}, nm = splitName(p.displayName || key);
+  const emp = findEmployee(nm.fn, nm.ln) || {};
+  const id = emp.id || findEmployeeId(nm.fn, nm.ln) || caRowId(p) || findRowEmployeeId(nm.fn, nm.ln) || '';
+  const termed = isTerminated(dates), wu = getLatestWriteup(dates), needs = caNeeds(p);
+  const curPts = caCurrentPts(dates);
+  const WU = { '1st': '1st Warning', '2nd': '2nd Warning', 'final': 'Final Warning', 'completed': 'Completed cycle' };
+  let cls = 'ok', msg;
+  if (termed) { cls = 'bad'; msg = 'Terminated'; }
+  else if (needs) { cls = 'bad'; msg = `Corrective action needed: ${CA_STAGES[caNextStage(dates)].label} (${fmtPts(curPts)} of ${CA_THRESHOLD} pts)`; }
+  else if (wu && wu !== 'completed') { cls = 'warn'; msg = `On corrective: ${WU[wu]} (${fmtPts(curPts)} of ${CA_THRESHOLD} pts toward the next step)`; }
+  else { msg = `No active corrective (${fmtPts(curPts)} of ${CA_THRESHOLD} pts)`; }
+  document.getElementById('pfName').textContent = nm.fn + ' ' + nm.ln;
+  document.getElementById('pfTitle').textContent = emp.positions || caTitleFor(nm.fn, nm.ln);
+  const st = document.getElementById('pfStatus'); st.className = 'pf-status ' + cls; st.textContent = msg;
+  const stat = (v, l, c) => `<div class="pf-stat"><div class="v ${c || ''}">${v}</div><div class="l">${l}</div></div>`;
+  const ann = getAnnualPts(dates), l90 = getLast90Pts(dates), wp = getWriteupPts(dates);
+  document.getElementById('pfStats').innerHTML =
+    stat(fmtPts(ann), 'Annual pts', ptsColor(ann)) + stat(fmtPts(l90), 'Last 90 days', ptsColor(l90)) +
+    stat(wu ? fmtPts(wp) : '&ndash;', 'Since last write-up', wu ? ptsColor(wp) : '') +
+    stat(fmtSickRemaining(getSickHoursRemaining(dates)), 'NYC-PS&amp;STO hrs left');
+  const miss = '<span class="missing">Not on file</span>';
+  const row = (k, v) => `<div class="k">${k}</div><div>${v}</div>`;
+  document.getElementById('pfRows').innerHTML =
+    row('Employee ID', id ? escHtml(id) : miss) +
+    row('Email', emp.email ? `<a href="mailto:${escHtml(emp.email)}">${escHtml(emp.email)}</a>` : miss) +
+    row('Phone', emp.phone ? `<a href="tel:+${escHtml(String(emp.phone).replace(/\D/g,''))}">${escHtml(fmtPhone(emp.phone))}</a>` : miss);
+  document.getElementById('pfCABtn').style.display = needs ? 'inline-flex' : 'none';
+  document.getElementById('profileModal').classList.add('active');
+}
+function closeProfile() { document.getElementById('profileModal').classList.remove('active'); pfPerson = null; }
+function profileOpenCA() { const k = pfPerson; closeProfile(); if (k) openCA(k); }
 function closeCA() { document.getElementById('caModal').classList.remove('active'); caPerson = null; }
 function caFileBase() { const d = caFormData(); return `${d.last}, ${d.first[0] || ''}. ${CA_STAGES[d.stage].label} - Attendance`; }
 function caDownload() {
