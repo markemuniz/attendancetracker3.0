@@ -679,6 +679,12 @@ function getCellHistory(pk, dk) {
   const h = (cellHistory[histSafeKey(pk)] || {})[histSafeKey(dk)] || {};
   return Object.values(h).filter(e => e && e.ts).sort((a, b) => b.ts - a.ts);
 }
+// Corner marker only when someone changed the cell after its last import
+// (newest history entry is not an import). Import-only cells stay clean.
+function isEditedAfterImport(pk, dk) {
+  const rows = getCellHistory(pk, dk);
+  return rows.length > 0 && rows[0].via !== 'import';
+}
 function fmtHistWhen(ts) {
   const d = new Date(ts);
   return (d.getMonth() + 1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2) + ' ' +
@@ -1373,7 +1379,7 @@ function renderTable() {
     if (periodInfo) {
       cells=filteredPeriods.map(p=>{ const pts=getPeriodPoints(dates,p,periodInfo.keyFn); const display=pts===0?'<span style="color:var(--text-muted)">&#183;</span>':(pts%1===0?pts:pts.toFixed(1)); return `<td class="period-cell ${pts>0?ptsColor(pts):''}">${display}</td>`; }).join('');
     } else {
-      cells=filteredDates.map(d=>{ const v=dates[d]||''; const hasUserNote=!!(userNotes[d]&&userNotes[d].trim()); const starHtml=hasUserNote?'<span class="note-star">&#9733;</span>':''; const titleAttr=hasUserNote?` title="${(userNotes[d]||'').replace(/"/g,'&quot;')}"`:'' ; const histCls=getCellHistory(key,d).length?' has-hist':''; return `<td class="date-cell${histCls}" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${starHtml}</td>`; }).join('');
+      cells=filteredDates.map(d=>{ const v=dates[d]||''; const hasUserNote=!!(userNotes[d]&&userNotes[d].trim()); const starHtml=hasUserNote?'<span class="note-star">&#9733;</span>':''; const titleAttr=hasUserNote?` title="${(userNotes[d]||'').replace(/"/g,'&quot;')}"`:'' ; const histCls=isEditedAfterImport(key,d)?' has-hist':''; return `<td class="date-cell${histCls}" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${starHtml}</td>`; }).join('');
     }
     const sickRemaining=getSickHoursRemaining(dates);
     const sickCls=sickRemaining<=0?'sick-empty':(sickRemaining<=8?'sick-low':'');
