@@ -81,16 +81,16 @@
   thead th:last-child{border-right:none}
   thead th:nth-child(1),thead th:nth-child(2),thead th:nth-child(3),thead th:nth-child(4){position:sticky;z-index:30;background:var(--surface)}
   thead th:nth-child(1){left:0;min-width:150px}
-  thead th:nth-child(2){left:150px;min-width:140px}
-  thead th:nth-child(3){left:290px;min-width:110px;text-align:center}
-  thead th:nth-child(4){left:400px;min-width:95px;text-align:center;border-right:1px solid rgba(108,140,255,0.25)}
+  thead th:nth-child(2){left:var(--sl2,150px);min-width:140px}
+  thead th:nth-child(3){left:var(--sl3,290px);min-width:110px;text-align:center}
+  thead th:nth-child(4){left:var(--sl4,400px);min-width:95px;text-align:center;border-right:1px solid rgba(108,140,255,0.25)}
   tbody td{padding:8px 12px;border-bottom:1px solid rgba(46,49,70,0.35);border-right:1px solid rgba(46,49,70,0.35);white-space:nowrap}
   tbody td:last-child{border-right:none}
   tbody td:nth-child(1),tbody td:nth-child(2),tbody td:nth-child(3),tbody td:nth-child(4){position:sticky;z-index:10;background:var(--bg)}
   tbody td:nth-child(1){left:0;min-width:150px}
-  tbody td:nth-child(2){left:150px;min-width:140px}
-  tbody td:nth-child(3){left:290px;min-width:110px;text-align:center;font-weight:600}
-  tbody td:nth-child(4){left:400px;min-width:95px;text-align:center;font-weight:600;border-right:1px solid rgba(108,140,255,0.25)}
+  tbody td:nth-child(2){left:var(--sl2,150px);min-width:140px}
+  tbody td:nth-child(3){left:var(--sl3,290px);min-width:110px;text-align:center;font-weight:600}
+  tbody td:nth-child(4){left:var(--sl4,400px);min-width:95px;text-align:center;font-weight:600;border-right:1px solid rgba(108,140,255,0.25)}
   tbody td.date-cell{text-align:center;cursor:pointer;min-width:55px;transition:background 0.1s;font-weight:600;font-size:0.78rem;position:relative}
   tbody td.date-cell:hover{background:var(--surface2)}
   tbody td.period-cell{text-align:center;cursor:default;min-width:80px;transition:background 0.1s;font-weight:600;font-size:0.8rem}
@@ -199,9 +199,9 @@
   .ca-banner.active{display:flex}
   .ca-banner .ca-chip{padding:3px 10px;border-radius:5px;border:1px solid rgba(255,107,122,0.4);background:rgba(255,107,122,0.1);color:var(--red);font-family:inherit;font-size:0.72rem;font-weight:600;cursor:pointer}
   .ca-banner .ca-chip:hover{background:rgba(255,107,122,0.2)}
-  .ca-folder{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;margin-left:6px;padding:0;vertical-align:middle;border-radius:5px;border:1px solid rgba(255,107,122,0.4);background:rgba(255,107,122,0.1);color:var(--red);cursor:pointer;transition:background 0.15s}
-  .ca-folder:hover{background:rgba(255,107,122,0.25)}
-  .ca-folder svg{width:13px;height:13px}
+  .ca-folder{display:inline-flex;align-items:center;justify-content:center;width:26px;height:23px;margin-left:6px;padding:0;vertical-align:middle;border-radius:5px;border:1px solid rgba(255,107,122,0.7);background:rgba(255,107,122,0.2);color:#ff8a96;cursor:pointer;transition:background 0.15s,transform 0.15s}
+  .ca-folder:hover{background:rgba(255,107,122,0.35);transform:scale(1.08)}
+  .ca-folder svg{width:15px;height:15px}
   .ca-modal{width:860px;max-width:96vw}
   .ca-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px}
   .ca-grid label{display:block;font-size:0.65rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px}
@@ -1382,7 +1382,20 @@ function renderTable() {
     return `<tr><td>${sickBadge}<span class="name-badge clickable ${nc}" ${pfAttr}>${fn}</span></td><td><span class="name-badge clickable ${nc}" ${pfAttr}>${ln}</span>${wuTag}${caFolder}</td><td class="${ptsColor(mainPts)}">${mainPts>0?mainPts%1===0?mainPts:mainPts.toFixed(1):'0'}</td><td class="${ptsColor(wp)}">${wp>0?wp%1===0?wp:wp.toFixed(1):'0'}</td>${cells}</tr>`;
   }).join('');
   updateCABanner();
+  syncStickyCols();
 }
+// The first 4 columns are frozen. Each one's left edge has to equal the real width of the
+// columns before it, so measure them after every render (a long name plus its write-up
+// tag and folder makes a name column wider than its minimum).
+function syncStickyCols() {
+  const t = document.getElementById('mainTable');
+  const ths = document.querySelectorAll('#tableHead th');
+  if (!t || ths.length < 4 || t.style.display === 'none') return;
+  let x = 0;
+  for (let i = 0; i < 3; i++) { x += ths[i].getBoundingClientRect().width; t.style.setProperty('--sl' + (i + 2), x + 'px'); }
+}
+window.addEventListener('resize', syncStickyCols);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncStickyCols);
 function fmtDateLong(d) {
   try { const dt=new Date(d+'T00:00:00'); return (dt.getMonth()+1).toString().padStart(2,'0')+'/'+dt.getDate().toString().padStart(2,'0')+'/'+dt.getFullYear(); }
   catch(e) { return d; }
