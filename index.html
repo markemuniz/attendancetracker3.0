@@ -243,6 +243,17 @@
   tbody td.date-cell.sched-on:hover{background:rgba(74,222,128,0.2)}
   .sch-time{display:block;font-size:0.6rem;font-weight:600;color:#4ade80;line-height:1.2;white-space:nowrap;letter-spacing:0.01em}
   .sch-time + .sch-time{margin-top:1px}
+  /* Scheduled day that also has a point: 0.5 = faint orange block, 1 or NC/NS = faint red block */
+  tbody td.date-cell.sched-on.sched-half{background:rgba(245,158,11,0.13);box-shadow:inset 0 0 0 1px rgba(245,158,11,0.32)}
+  tbody td.date-cell.sched-on.sched-half:hover{background:rgba(245,158,11,0.22)}
+  .sched-half .sch-time{color:#f59e0b}
+  tbody td.date-cell.sched-on.sched-one{background:rgba(255,107,122,0.13);box-shadow:inset 0 0 0 1px rgba(255,107,122,0.32)}
+  tbody td.date-cell.sched-on.sched-one:hover{background:rgba(255,107,122,0.22)}
+  .sched-one .sch-time{color:#ff6b7a}
+  /* Scheduled day marked Excused = faint blue block */
+  tbody td.date-cell.sched-on.sched-exc{background:rgba(108,140,255,0.13);box-shadow:inset 0 0 0 1px rgba(108,140,255,0.34)}
+  tbody td.date-cell.sched-on.sched-exc:hover{background:rgba(108,140,255,0.22)}
+  .sched-exc .sch-time{color:#6c8cff}
   .sch-ok{background:#4ade80}
   .sch-warn{background:#f59e0b}
   .sch-bad{background:#ff6b7a}
@@ -1512,7 +1523,8 @@ function renderTable() {
         const tip=[hasUserNote?userNotes[d]:'', sc?sc.title:''].filter(Boolean).join('\n');
         const titleAttr=tip?` title="${escHtml(tip).replace(/\n/g,'&#10;')}"`:'';
         const histCls=isEditedAfterImport(key,d)?' has-hist':'';
-        return `<td class="date-cell${histCls}${sc?' sched-on':''}" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${sc?sc.html:''}${starHtml}</td>`;
+        const schCls=!sc?'':' sched-on'+(getPoints(v)>=1||/^nc\s*\/?\s*ns$/i.test(String(v).trim())?' sched-one':getPoints(v)>0?' sched-half':/^excused$/i.test(String(v).trim())?' sched-exc':'');
+        return `<td class="date-cell${histCls}${schCls}" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${sc?sc.html:''}${starHtml}</td>`;
       }).join('');
     }
     const sickRemaining=getSickHoursRemaining(dates);
