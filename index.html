@@ -63,6 +63,37 @@
   .btn.primary:hover{background:var(--accent-dim)}
   .btn.danger{color:var(--red);border-color:rgba(255,107,122,0.25)}
   .btn.danger:hover{background:rgba(255,107,122,0.08)}
+  /* Hamburger menu (holds every toolbar control) */
+  .menu-wrap{position:relative}
+  .hamburger{width:36px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);cursor:pointer;transition:all 0.15s;padding:0}
+  .hamburger svg{width:18px;height:18px}
+  .hamburger:hover,.hamburger.open{background:var(--surface3);border-color:var(--border-light)}
+  .main-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;width:250px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.45);z-index:60;padding:6px;max-height:calc(100vh - 140px);overflow-y:auto}
+  .main-menu.active{display:block}
+  .mm-label{font-size:0.62rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);padding:8px 8px 6px}
+  .mm-seg{display:flex;gap:4px;padding:0 6px 8px}
+  .mm-seg button{flex:1;padding:6px 0;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text-dim);font-family:inherit;font-size:0.72rem;font-weight:500;cursor:pointer;transition:all 0.15s}
+  .mm-seg button:hover{color:var(--text);border-color:var(--border-light)}
+  .mm-seg button.selected{background:var(--accent-glow);color:var(--accent);border-color:rgba(108,140,255,0.4)}
+  .mm-select{display:block;width:calc(100% - 12px);margin:0 6px 6px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:inherit;font-size:0.75rem;outline:none;cursor:pointer;color-scheme:dark}
+  .mm-select:focus{border-color:var(--accent)}
+  .mm-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:none;border-radius:6px;background:none;color:var(--text);font-family:inherit;font-size:0.78rem;text-align:left;cursor:pointer;transition:background 0.1s}
+  .mm-item:hover:not(:disabled){background:var(--surface2)}
+  .mm-item:disabled{opacity:0.4;cursor:not-allowed}
+  .mm-ico{width:16px;text-align:center;color:var(--text-muted);flex-shrink:0}
+  .mm-right{margin-left:auto;font-size:0.68rem;color:var(--text-muted)}
+  .mm-item.danger,.mm-item.danger .mm-ico{color:var(--red)}
+  .mm-item.danger:hover{background:rgba(255,107,122,0.08)}
+  .mm-switch{margin-left:auto;width:28px;height:16px;border-radius:8px;background:var(--surface3);position:relative;transition:background 0.15s;flex-shrink:0}
+  .mm-switch::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--text-dim);transition:all 0.15s}
+  .mm-item.on .mm-switch{background:var(--accent)}
+  .mm-item.on .mm-switch::after{left:14px;background:#fff}
+  .mm-sep{height:1px;background:var(--border);margin:6px 4px}
+  .mm-who{font-size:0.66rem;color:var(--text-muted);padding:0 10px 4px 36px;margin-top:-4px;overflow-wrap:anywhere}
+  .view-summary{display:none;align-items:center;gap:6px;font-size:0.72rem;color:var(--accent);background:var(--accent-glow);border:1px solid rgba(108,140,255,0.3);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+  .view-summary.active{display:inline-flex}
+  .view-summary:hover{border-color:rgba(108,140,255,0.55)}
+  .view-summary .vs-x{opacity:0.7;font-size:0.8rem}
   .dropdown{position:relative;display:inline-block}
   .dropdown-btn{padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.75rem;font-weight:500;cursor:pointer;transition:all 0.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
   .dropdown-btn:hover{background:var(--surface3);border-color:var(--border-light)}
@@ -263,32 +294,38 @@
   <div class="toolbar">
     <input class="search-box" id="searchBox" type="text" placeholder="Search budtenders..." oninput="renderTable()">
     <div class="toolbar-right">
-      <div class="dropdown">
-        <button class="dropdown-btn" id="viewModeBtn" onclick="toggleViewDropdown(event)">Normal View</button>
-        <div class="dropdown-menu" id="viewModeMenu">
-          <div class="dropdown-item selected" data-mode="normal" onclick="setViewMode('normal')">Normal View</div>
-          <div class="dropdown-item" data-mode="week" onclick="setViewMode('week')">Week View</div>
-          <div class="dropdown-item" data-mode="month" onclick="setViewMode('month')">Month View</div>
+      <button class="view-summary" id="viewSummary" onclick="resetViewFilters()" title="Back to Normal View, All Months"></button>
+      <div class="menu-wrap" id="menuWrap">
+        <button class="hamburger" id="menuBtn" onclick="toggleMainMenu(event)" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="main-menu" id="mainMenu" role="menu">
+          <div class="mm-label">View</div>
+          <div class="mm-seg" id="viewModeMenu">
+            <button class="selected" data-mode="normal" onclick="setViewMode('normal')">Normal</button>
+            <button data-mode="week" onclick="setViewMode('week')">Week</button>
+            <button data-mode="month" onclick="setViewMode('month')">Month</button>
+          </div>
+          <select class="mm-select" id="monthFilterSelect" onchange="setMonthFilter(this.value)" aria-label="Month filter"><option value="all">All Months</option></select>
+          <button class="mm-item" id="hideBtn" onclick="toggleShowHidden()"><span class="mm-ico">&#128065;</span>Show hidden<span class="mm-switch"></span></button>
+          <div class="mm-sep"></div>
+          <button class="mm-item" onclick="menuAction(openAddDate)"><span class="mm-ico">+</span>Add Date</button>
+          <button class="mm-item" onclick="menuAction(openImport)"><span class="mm-ico">&#8593;</span>Import</button>
+          <button class="mm-item" onclick="menuAction(openHistory)" title="See every import"><span class="mm-ico">&#128337;</span>History<span class="mm-right" id="historyCount"></span></button>
+          <button class="mm-item" onclick="menuAction(exportCSV)"><span class="mm-ico">&#8595;</span>Export</button>
+          <button class="mm-item" id="undoBtn" onclick="menuAction(undoLast)" disabled><span class="mm-ico">&#8634;</span>Undo<span class="mm-right" id="undoCount"></span></button>
+          <div class="mm-sep"></div>
+          <button class="mm-item danger" onclick="menuAction(confirmClear)"><span class="mm-ico">&#10005;</span>Clear</button>
+          <button class="mm-item" id="signOutBtn" onclick="menuAction(handleLock)" title="Sign out"><span class="mm-ico">&#x21AA;</span>Sign Out</button>
+          <div class="mm-who" id="menuWho"></div>
         </div>
       </div>
-      <div class="dropdown">
-        <button class="dropdown-btn" id="monthFilterBtn" onclick="toggleMonthFilterDropdown(event)">All Months</button>
-        <div class="dropdown-menu" id="monthFilterMenu"></div>
-      </div>
-      <button class="btn" id="hideBtn" onclick="toggleShowHidden()">Show Hidden</button>
-      <button class="btn" onclick="openAddDate()">+ Add Date</button>
-      <button class="btn" onclick="openImport()">&#8593; Import</button>
-      <button class="btn" onclick="openHistory()" title="See every import">&#128337; History<span class="history-count" id="historyCount"></span></button>
-      <button class="btn" onclick="exportCSV()">&#8595; Export</button>
-      <button class="btn" id="undoBtn" onclick="undoLast()" disabled style="opacity:0.5;cursor:not-allowed">&#8634; Undo</button>
-      <button class="btn danger" onclick="confirmClear()">Clear</button>
-      <button class="btn" id="signOutBtn" onclick="handleLock()" title="Sign out">&#x21AA; Sign Out</button>
     </div>
   </div>
   <div class="table-wrap" id="tableWrap">
     <div class="empty-state" id="emptyState">
       <h2>No attendance data yet</h2>
-      <p>Click Import to upload a weekly Excel report</p>
+      <p>Open the &#9776; menu and choose Import to upload a weekly Excel report</p>
     </div>
     <table id="mainTable" style="display:none">
       <thead id="tableHead"></thead>
@@ -766,9 +803,9 @@ function updateUndoBtn() {
   const btn = document.getElementById('undoBtn');
   if (!btn) return;
   btn.disabled = undoStack.length === 0;
-  btn.style.opacity = undoStack.length === 0 ? '0.5' : '1';
-  btn.style.cursor = undoStack.length === 0 ? 'not-allowed' : 'pointer';
   btn.title = undoStack.length ? `Undo last change (${undoStack.length} step${undoStack.length>1?'s':''} available)` : 'Nothing to undo';
+  const cnt = document.getElementById('undoCount');
+  if (cnt) cnt.textContent = undoStack.length || '';
 }
 function undoLast() {
   if (!undoStack.length) { toast('Nothing to undo', 'error'); return; }
@@ -779,18 +816,52 @@ function undoLast() {
   updateUndoBtn();
   toast('Undo successful', 'success');
 }
-function toggleViewDropdown(e) {
+// ── Hamburger menu ──
+function closeMainMenu() {
+  const m = document.getElementById('mainMenu');
+  if (!m || !m.classList.contains('active')) return;
+  m.classList.remove('active');
+  const b = document.getElementById('menuBtn');
+  b.classList.remove('open'); b.setAttribute('aria-expanded', 'false');
+}
+function toggleMainMenu(e) {
   e.stopPropagation();
-  document.getElementById('viewModeMenu').classList.toggle('active');
+  const m = document.getElementById('mainMenu');
+  if (m.classList.contains('active')) { closeMainMenu(); return; }
+  buildMonthFilterMenu();
+  const who = document.getElementById('menuWho');
+  if (who) who.textContent = currentUserEmail || '';
+  m.classList.add('active');
+  const b = document.getElementById('menuBtn');
+  b.classList.add('open'); b.setAttribute('aria-expanded', 'true');
   document.getElementById('ptsColMenu').classList.remove('active');
-  document.getElementById('monthFilterMenu').classList.remove('active');
+}
+function menuAction(fn) { closeMainMenu(); fn(); }
+// Chip beside the menu so a non-default view is never hidden away
+function updateViewSummary() {
+  const el = document.getElementById('viewSummary');
+  if (!el) return;
+  const parts = [];
+  if (viewMode !== 'normal') parts.push(viewMode === 'week' ? 'Week View' : 'Month View');
+  if (monthFilter !== 'all') parts.push(monthLabel(monthFilter));
+  if (showHidden) parts.push('Showing hidden');
+  el.innerHTML = parts.length ? escHtml(parts.join(' · ')) + ' <span class="vs-x">&#10005;</span>' : '';
+  el.classList.toggle('active', parts.length > 0);
+}
+function resetViewFilters() {
+  if (showHidden) toggleShowHidden();
+  monthFilter = 'all';
+  setViewMode('normal');
+}
+function monthLabel(mk) {
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const [y,m] = mk.split('-');
+  return monthNames[parseInt(m)-1] + ' ' + y;
 }
 function setViewMode(mode) {
   viewMode = mode;
-  const labels = { normal: 'Normal View', week: 'Week View', month: 'Month View' };
-  document.getElementById('viewModeBtn').textContent = labels[mode];
-  document.querySelectorAll('#viewModeMenu .dropdown-item').forEach(el => el.classList.toggle('selected', el.dataset.mode === mode));
-  document.getElementById('viewModeMenu').classList.remove('active');
+  document.querySelectorAll('#viewModeMenu button').forEach(el => el.classList.toggle('selected', el.dataset.mode === mode));
+  updateViewSummary();
   renderTable();
 }
 function setPtsMode(mode) {
@@ -809,47 +880,34 @@ function togglePtsDropdown(e) {
   menu.style.minWidth = '0';
   menu.style.width = 'max-content';
   menu.classList.toggle('active');
-  document.getElementById('viewModeMenu').classList.remove('active');
-  document.getElementById('monthFilterMenu').classList.remove('active');
-}
-function toggleMonthFilterDropdown(e) {
-  e.stopPropagation();
-  buildMonthFilterMenu();
-  document.getElementById('monthFilterMenu').classList.toggle('active');
-  document.getElementById('viewModeMenu').classList.remove('active');
-  document.getElementById('ptsColMenu').classList.remove('active');
+  closeMainMenu();
 }
 function buildMonthFilterMenu() {
   const monthSet = new Set();
   allDates.forEach(d => monthSet.add(d.substring(0, 7)));
   const months = Array.from(monthSet).sort().reverse();
-  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const menu = document.getElementById('monthFilterMenu');
-  let html = `<div class="dropdown-item ${monthFilter==='all'?'selected':''}" onclick="setMonthFilter('all')">All Months</div>`;
-  months.forEach(mk => {
-    const [y,m] = mk.split('-');
-    html += `<div class="dropdown-item ${monthFilter===mk?'selected':''}" onclick="setMonthFilter('${mk}')">${monthNames[parseInt(m)-1]} ${y}</div>`;
-  });
-  menu.innerHTML = html;
+  const sel = document.getElementById('monthFilterSelect');
+  if (!sel) return;
+  let html = `<option value="all">All Months</option>`;
+  months.forEach(mk => { html += `<option value="${mk}">${monthLabel(mk)}</option>`; });
+  sel.innerHTML = html;
+  sel.value = months.includes(monthFilter) ? monthFilter : 'all';
 }
 function setMonthFilter(mk) {
   monthFilter = mk;
-  const btn = document.getElementById('monthFilterBtn');
-  if (mk === 'all') { btn.textContent = 'All Months'; }
-  else {
-    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    const [y,m] = mk.split('-');
-    btn.textContent = monthNames[parseInt(m)-1] + ' ' + y;
-  }
-  document.getElementById('monthFilterMenu').classList.remove('active');
+  const sel = document.getElementById('monthFilterSelect');
+  if (sel && sel.value !== mk) sel.value = mk;
+  updateViewSummary();
   renderTable();
 }
 document.addEventListener('click', e => {
-  if (!e.target.closest('.dropdown') && !e.target.closest('.header-dropdown') && !e.target.closest('#ptsColMenu')) {
-    document.getElementById('viewModeMenu').classList.remove('active');
+  if (!e.target.closest('.header-dropdown') && !e.target.closest('#ptsColMenu')) {
     document.getElementById('ptsColMenu').classList.remove('active');
-    document.getElementById('monthFilterMenu').classList.remove('active');
   }
+  if (!e.target.closest('#menuWrap')) closeMainMenu();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeMainMenu(); document.getElementById('ptsColMenu').classList.remove('active'); }
 });
 function openImport() {
   document.getElementById('importModal').classList.add('active');
@@ -1298,9 +1356,8 @@ let showHidden=false;
 function toggleShowHidden() {
   showHidden=!showHidden;
   const btn=document.getElementById('hideBtn');
-  btn.textContent=showHidden?'Hide Hidden':'Show Hidden';
-  btn.style.borderColor=showHidden?'rgba(108,140,255,0.4)':'';
-  btn.style.color=showHidden?'#6c8cff':'';
+  if (btn) { btn.classList.toggle('on', showHidden); btn.setAttribute('aria-checked', String(showHidden)); }
+  updateViewSummary();
   renderTable();
 }
 function toggleHidePerson() {
