@@ -1427,7 +1427,7 @@ function getLatestWriteup(dates) {
 function getNameColor(dates, terminated) {
   if (terminated) return 'name-terminated';
   const hasWriteup=getLatestWriteup(dates)!==null;
-  const pts=hasWriteup?getWriteupPts(dates):getLast90Pts(dates);
+  const pts=hasWriteup?getWriteupPts(dates):getLast6MoPts(dates);
   if (pts>=3) return 'name-red';
   if (pts>=1.5) return 'name-orange';
   return 'name-green';
@@ -1681,7 +1681,7 @@ function confirmClear() {
 }
 // ── Corrective Action (auto-generated at 3 points) ───────────────────────────
 // Anyone whose current points (same number that turns the name red: points since
-// their last write-up, or last-90-days if never written up) reach 3 gets a
+// their last write-up, or last 6 months if never written up) reach 3 gets a
 // corrective-action form pre-filled from the occurrence history. "Record in
 // tracker" drops the 1st/2nd/Final/Terminated marker on the form date, which
 // resets their write-up points and clears them from the banner.
@@ -1808,7 +1808,8 @@ function caNextStage(dates) {
   if (wu === 'final') return 'termination';
   return 'first';   // never written up, or last cycle was marked Completed
 }
-function caCurrentPts(dates) { return getLatestWriteup(dates) !== null ? getWriteupPts(dates) : getLast90Pts(dates); }
+// Never written up → count the last 6 months (not 90 days)
+function caCurrentPts(dates) { return getLatestWriteup(dates) !== null ? getWriteupPts(dates) : getLast6MoPts(dates); }
 function caNeeds(person) {
   if (!person || person.hidden || isManager(person.displayName)) return false;
   const dates = person.dates || {};
