@@ -1932,6 +1932,9 @@ let caAlertsSent = {};
 let caAlertsLoaded = false;
 let caDataLoaded = false;
 const caSendFailed = new Set();   // don't retry in a loop this session if EmailJS keeps failing
+const CA_SEND_GAP_MS = 1500;
+const caSendInFlight = new Set();   // keys queued or sending right now, so a re-sync can't double-send
+let caSendQueue = Promise.resolve();
 if (window.emailjs) emailjs.init({ publicKey: CA_EMAIL.publicKey });
 
 function loadCAAlerts() {
@@ -1976,29 +1979,68 @@ function caSyncAlerts() {
   const pending = caPendingKeys();
   // clear markers for people no longer on the list
   Object.keys(caAlertsSent).forEach(k => { if (!pending.includes(k)) caAlertsRef.child(k).remove().catch(()=>{}); });
+  caForgetSentExcept(pending);
   pending.forEach(k => {
     const sig = caAlertSig(attendanceData[k]);
-    if (caAlertsSent[k] === sig || caSendFailed.has(k + '|' + sig)) return;
-    caAlertsRef.child(k).transaction(cur => cur === sig ? undefined : sig).then(res => {
-      if (!res.committed) return;   // someone else already sent it
-      const p = attendanceData[k]; if (!p) return;
-      const nm = splitName(p.displayName || k);
-      const ca = caAlertContent(k);
-      return emailjs.send(CA_EMAIL.serviceId, CA_EMAIL.templateId, {
-        employee_name: (nm.fn + ' ' + nm.ln).trim(),
-        points: fmtPts(caGetOccurrences(p).reduce((a, o) => a + o.pts, 0)),
-        next_stage: CA_STAGES[caNextStage(p.dates || {})].label,
-        ca_email: ca.email,
-        ca_form_html: ca.form
-      }).then(() => toast('Alert emailed: ' + nm.fn + ' ' + nm.ln + ' reached ' + CA_THRESHOLD + ' points', 'success'))
-        .catch(err => {
-          console.warn('EmailJS send failed:', err);
-          caSendFailed.add(k + '|' + sig);
-          toast('Alert email failed for ' + nm.fn + ' ' + nm.ln, 'error');
-          caAlertsRef.child(k).remove().catch(()=>{});   // allow a retry next load
-        });
-    }).catch(err => console.warn('Alert marker save failed:', err.message));
+    if (caAlertsSent[k] === sig || caSendFailed.has(k + '|' + sig) || caSendInFlight.has(k) || caAlreadySent(k, sig)) return;
+    // EmailJS allows 1 request per second, so alerts go out one at a time, spaced apart
+    caSendInFlight.add(k);
+    caSendQueue = caSendQueue
+      .then(() => caSendAlert(k, sig))
+      .catch(err => console.warn('Alert send error:', err && (err.message || err.text || err)))
+      .then(() => { caSendInFlight.delete(k); return caWait(CA_SEND_GAP_MS); });
   });
+}
+function caWait(ms) { return new Promise(r => setTimeout(r, ms)); }
+// Belt-and-braces "already emailed" memory kept in this browser, separate from the
+// Firebase marker. If another open copy of the tracker (e.g. an older version that
+// counts points differently) erases the Firebase marker, this copy still won't
+// re-send the same alert. Cleared when the person drops off the list here; expires after 7 days.
+const CA_SENT_LS = 'caAlertSentLocal', CA_SENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const caSentThisSession = new Set();
+function caSentLocalRead() { try { return JSON.parse(localStorage.getItem(CA_SENT_LS) || '{}') || {}; } catch (e) { return {}; } }
+function caSentLocalWrite(m) { try { localStorage.setItem(CA_SENT_LS, JSON.stringify(m)); } catch (e) {} }
+function caAlreadySent(k, sig) {
+  if (caSentThisSession.has(k + '|' + sig)) return true;
+  const e = caSentLocalRead()[k];
+  return !!(e && e.sig === sig && Date.now() - e.at < CA_SENT_TTL_MS);
+}
+function caMarkSent(k, sig) {
+  caSentThisSession.add(k + '|' + sig);
+  const m = caSentLocalRead(); m[k] = { sig, at: Date.now() }; caSentLocalWrite(m);
+}
+function caForgetSentExcept(pending) {
+  const m = caSentLocalRead(); let changed = false;
+  Object.keys(m).forEach(k => { if (!pending.includes(k) || Date.now() - m[k].at >= CA_SENT_TTL_MS) { delete m[k]; changed = true; } });
+  [...caSentThisSession].forEach(s => { if (!pending.includes(s.split('|')[0])) caSentThisSession.delete(s); });
+  if (changed) caSentLocalWrite(m);
+}
+function caSendAlert(k, sig) {
+  if (caAlreadySent(k, sig)) return Promise.resolve();
+  return caAlertsRef.child(k).transaction(cur => cur === sig ? undefined : sig).then(res => {
+    if (!res.committed) return;   // someone else already sent it
+    const p = attendanceData[k]; if (!p) return;
+    const nm = splitName(p.displayName || k);
+    const ca = caAlertContent(k);
+    const params = {
+      employee_name: (nm.fn + ' ' + nm.ln).trim(),
+      points: fmtPts(caGetOccurrences(p).reduce((a, o) => a + o.pts, 0)),
+      next_stage: CA_STAGES[caNextStage(p.dates || {})].label,
+      ca_email: ca.email,
+      ca_form_html: ca.form
+    };
+    const send = () => emailjs.send(CA_EMAIL.serviceId, CA_EMAIL.templateId, params);
+    // one retry after a pause if EmailJS says we're going too fast (429)
+    return send().catch(err => (err && err.status === 429) ? caWait(4000).then(send) : Promise.reject(err))
+      .then(() => caMarkSent(k, sig))
+      .then(() => toast('Alert emailed: ' + nm.fn + ' ' + nm.ln + ' reached ' + CA_THRESHOLD + ' points', 'success'))
+      .catch(err => {
+        console.warn('EmailJS send failed:', err && err.status, err && err.text, err);
+        caSendFailed.add(k + '|' + sig);
+        toast('Alert email failed for ' + nm.fn + ' ' + nm.ln, 'error');
+        caAlertsRef.child(k).remove().catch(()=>{});   // allow a retry next load
+      });
+  }).catch(err => console.warn('Alert marker save failed:', err.message));
 }
 
 // ── Banner + auto prompt ──
