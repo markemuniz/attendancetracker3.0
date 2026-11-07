@@ -125,7 +125,8 @@
   tbody td.date-cell{text-align:center;cursor:pointer;min-width:55px;transition:background 0.1s;font-weight:600;font-size:0.78rem;position:relative}
   tbody td.date-cell:hover{background:var(--surface2)}
   tbody td.period-cell{text-align:center;cursor:default;min-width:80px;transition:background 0.1s;font-weight:600;font-size:0.8rem}
-  thead th.date-col{text-align:center;min-width:55px}
+  thead th.date-col{text-align:center;min-width:55px;line-height:1.35}
+  thead th.date-col .dow{display:block;font-size:0.6rem;font-weight:500;color:var(--text-dim);letter-spacing:0.08em}
   thead th.period-col{text-align:center;min-width:80px}
   tbody tr:hover td{background:var(--surface)}
   tbody tr:hover td:nth-child(1),tbody tr:hover td:nth-child(2),tbody tr:hover td:nth-child(3),tbody tr:hover td:nth-child(4){background:var(--surface)}
@@ -1478,6 +1479,10 @@ function fmtDate(d) {
   try { const dt=new Date(d+'T00:00:00'); return (dt.getMonth()+1).toString().padStart(2,'0')+'/'+dt.getDate().toString().padStart(2,'0'); }
   catch(e) { return d; }
 }
+function fmtDow(d) {
+  try { return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(d+'T00:00:00').getDay()]||''; }
+  catch(e) { return ''; }
+}
 function getWeekKey(dateStr) {
   const d=new Date(dateStr+'T00:00:00'), day=d.getDay(), diff=day===0?-6:1-day;
   d.setDate(d.getDate()+diff); return d.toISOString().split('T')[0];
@@ -1526,7 +1531,7 @@ function renderTable() {
   }
   const headerCols=periodInfo
     ?filteredPeriods.map(p=>`<th class="period-col">${periodInfo.fmtFn(p)}</th>`).join('')
-    :filteredDates.map(d=>`<th class="date-col">${fmtDate(d)}</th>`).join('');
+    :filteredDates.map(d=>`<th class="date-col"><span class="dow">${fmtDow(d)}</span>${fmtDate(d)}</th>`).join('');
   document.getElementById('tableHead').innerHTML=`<tr><th>First Name</th><th>Last Name</th><th><span class="header-dropdown" onclick="togglePtsDropdown(event)">${ptsLabel}</span></th><th>Write-Up Pts</th>${headerCols}</tr>`;
   const caPending=new Set(caPendingKeys());
   document.getElementById('tableBody').innerHTML=people.map(([key,person])=>{
