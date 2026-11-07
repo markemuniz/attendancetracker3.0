@@ -255,6 +255,10 @@
   tbody td.date-cell.sched-on.sched-exc{background:rgba(108,140,255,0.13);box-shadow:inset 0 0 0 1px rgba(108,140,255,0.34)}
   tbody td.date-cell.sched-on.sched-exc:hover{background:rgba(108,140,255,0.22)}
   .sched-exc .sch-time{color:#6c8cff}
+  /* Scheduled day covered by NYC-PS&STO sick time = light faint sky-blue block */
+  tbody td.date-cell.sched-on.sched-sick{background:rgba(56,189,248,0.10);box-shadow:inset 0 0 0 1px rgba(56,189,248,0.30)}
+  tbody td.date-cell.sched-on.sched-sick:hover{background:rgba(56,189,248,0.18)}
+  .sched-sick .sch-time{color:#7dd3fc}
   .sch-ok{background:#4ade80}
   .sch-warn{background:#f59e0b}
   .sch-bad{background:#ff6b7a}
@@ -1556,7 +1560,7 @@ function renderTable() {
         const tip=[hasUserNote?userNotes[d]:'', sc?sc.title:''].filter(Boolean).join('\n');
         const titleAttr=tip?` title="${escHtml(tip).replace(/\n/g,'&#10;')}"`:'';
         const histCls=isEditedAfterImport(key,d)?' has-hist':'';
-        const schCls=!sc?'':' sched-on'+(getPoints(v)>=1||/^nc\s*\/?\s*ns$/i.test(String(v).trim())?' sched-one':getPoints(v)>0?' sched-half':/^excused$/i.test(String(v).trim())?' sched-exc':'');
+        const schCls=!sc?'':' sched-on'+(getPoints(v)>=1||/^nc\s*\/?\s*ns$/i.test(String(v).trim())?' sched-one':getPoints(v)>0?' sched-half':/^excused$/i.test(String(v).trim())?' sched-exc':parseSickMinutes(v)!==null?' sched-sick':'');
         return `<td class="date-cell${histCls}${schCls}" onclick="openEdit('${key.replace(/'/g,"\\'")}','${d}')"${titleAttr}>${cellHtml(v)}${sc?sc.html:''}${starHtml}</td>`;
       }).join('');
     }
